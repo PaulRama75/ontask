@@ -1,0 +1,160 @@
+// FER Employee Onboarding — Prisma schema
+// Local dev uses SQLite. To move to DigitalOcean Managed Postgres later:
+//   1) change provider to "postgresql"
+//   2) set DATABASE_URL to the DO connection string
+//   3) run `npx prisma migrate dev`
+// Enums are modeled as String for SQLite portability (validated in app code).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// An employee record. Created either by an onboarding link or by Excel import.
+model Employee {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Core identity
+  firstName String?
+  lastName  String?
+  email     String?
+  phone     String?
+
+  // Sensitive — stored encrypted-at-rest target later; plain for Phase 1 dev
+  ssn       String? // Social Security Number
+
+  // Address
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  zip          String?
+
+  // Compliance fields
+  driversLicenseNumber String?
+  safetyCouncilId      String?   // Safety Council ID / card number
+  safetyCouncilExpiry  DateTime?
+  twicNumber           String?   // TWIC card number
+  twicExpiry           DateTime?
+
+  // Project Lead managed fields
+  site       String?  // job site / location
+  active     Boolean  @default(true)
+
+  // Project Lead assigned at onboarding-link creation; notified on completion.
+  projectLeadEmail String?
+
+  // Rate info (set by Project Lead in Phase 3; placeholder now)
+  payRate    Float?
+  billRate   Float?
+
+  // Project Lead post-onboarding details. Booleans are nullable = "not set yet".
+  hireDate           DateTime?
+  frcNeeded          Boolean?  // does the employee need FRC?
+  frcSize            String?   // FRC size when needed
+  creditCardApproved Boolean?  // company credit card approved?
+  emailNeeded        Boolean?  // does the employee need a company email?
+
+  // Onboarding lifecycle: DRAFT, SUBMITTED, HR_REVIEW, RATES_ASSIGNED, APPROVED
+  status     String   @default("DRAFT")
+  source     String   @default("LINK") // LINK or EXCEL
+
+  // Overall approval (per-column approval workflow comes in Phase 3)
+  approved   Boolean   @default(false)
+  approvedAt DateTime?
+
+  certifications Certification[]
+  documents      Document[]
+  onboardingLink OnboardingLink?
+}
+
+// Multiple certifications per employee.
+model Certification {
+  id         String    @id @default(cuid())
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+  name       String
+  issuer     String?
+  issuedDate DateTime?
+  expiryDate DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// Uploaded documents (license scan, SSN card, TWIC, safety council, cert PDFs, etc.)
+model Document {
+  id         String   @id @default(cuid())
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+  // Logical category: LICENSE, SSN, TWIC, SAFETY_COUNCIL, CERTIFICATION, OTHER
+  category   String
+  label      String?  // optional human label (e.g. cert name)
+  fileName   String   // original filename
+  storageKey String   // key/path in the storage backend
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+}
+
+// Application users (staff). Distinct from Employee onboarding records.
+// role is one of the values in src/lib/rbac.ts ROLES.
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  role         String     @default("EMPLOYEE")
+  passwordHash String
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  sessions     Session[]
+  sites        UserSite[]
+}
+
+// Site-level (row) access. A non-admin user with one or more UserSite rows is
+// restricted to employees at those sites. A user with no rows is unrestricted.
+// Admins / Super Admins are always unrestricted regardless of rows.
+model UserSite {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site   String
+
+  @@unique([userId, site])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Per-column access for a role. level: HIDDEN | VIEW | EDIT.
+// canApprove marks the role responsible for approving that column.
+model ColumnAccess {
+  id         String  @id @default(cuid())
+  role       String
+  columnKey  String
+  level      String  @default("VIEW")
+  canApprove Boolean @default(false)
+
+  @@unique([role, columnKey])
+}
+
+// A unique tokenized link sent to an employee to complete onboarding.
+model OnboardingLink {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String    @unique
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  usedAt     DateTime?
+}

@@ -1,0 +1,289 @@
+import { prisma } from "@/lib/prisma";
+import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
+import { DOCUMENT_CATEGORIES } from "@/lib/constants";
+import { getCurrentUser } from "@/lib/auth";
+import { getAccessMap, canView, canEdit, isAdminRole } from "@/lib/rbac";
+import { saveProjectLeadDetails } from "../../actions";
+
+export const dynamic = "force-dynamic";
+
+// Project Lead columns shown in the grouped details form, in display order.
+const PL_FIELDS = [
+  "site",
+  "hireDate",
+  "payRate",
+  "billRate",
+  "frc",
+  "creditCard",
+  "emailNeeded",
+] as const;
+
+function dateInputValue(d: Date | null) {
+  return d ? d.toISOString().slice(0, 10) : "";
+}
+
+export default async function EmployeeLibraryPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const me = await getCurrentUser();
+  if (!me) redirect("/login");
+
+  // Access: the full library (PII + documents) requires the "library" permission.
+  // A Project Lead who can edit any PL field may open the page to fill those
+  // fields, but the sensitive sections stay hidden from them.
+  const access = await getAccessMap(me.role);
+  const canLib = canView(access, "library");
+  const canEditPL = PL_FIELDS.some((k) => canEdit(access, k));
+  if (!canLib && !canEditPL) redirect("/admin/grid");
+
+  const { id } = await params;
+  const e = await prisma.employee.findUnique({
+    where: { id },
+    include: { documents: { orderBy: { createdAt: "asc" } }, certifications: true },
+  });
+  if (!e) notFound();
+
+  // Site-level access: a restricted non-admin can't open employees outside their sites.
+  if (!isAdminRole(me.role)) {
+    const mine = await prisma.userSite.findMany({
+      where: { userId: me.id },
+      select: { site: true },
+    });
+    if (mine.length > 0 && !(e.site && mine.some((s) => s.site === e.site))) {
+      redirect("/admin/grid");
+    }
+  }
+
+  const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || "Unnamed employee";
+  const docsByCategory = (cat: string) => e.documents.filter((d) => d.category === cat);
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-10">
+      <div className="mx-auto max-w-4xl px-4">
+        <Link href="/admin" className="text-sm text-blue-600 hover:underline">
+          ← Back to admin
+        </Link>
+        <h1 className="mt-2 text-2xl font-bold text-gray-900">{name}</h1>
+        <p className="text-sm text-gray-500">
+          {canLib ? "Document library" : "Project Lead details"} · status {e.status}
+        </p>
+
+        {(canLib || canEditPL) && (
+          <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900">Project Lead Details</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Filled in by the Project Lead after the employee completes onboarding.
+            </p>
+            <form action={saveProjectLeadDetails} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <input type="hidden" name="employeeId" value={e.id} />
+
+              {canView(access, "site") && (
+                <PLField label="Site">
+                  {canEdit(access, "site") ? (
+                    <input name="site" defaultValue={e.site ?? ""} className={inputCls} />
+                  ) : (
+                    <ReadOnly value={e.site} />
+                  )}
+                </PLField>
+              )}
+
+              {canView(access, "hireDate") && (
+                <PLField label="Hire Date">
+                  {canEdit(access, "hireDate") ? (
+                    <input type="date" name="hireDate" defaultValue={dateInputValue(e.hireDate)} className={inputCls} />
+                  ) : (
+                    <ReadOnly value={fmtDate(e.hireDate)} />
+                  )}
+                </PLField>
+              )}
+
+              {canView(access, "payRate") && (
+                <PLField label="Pay Rate">
+                  {canEdit(access, "payRate") ? (
+                    <input type="number" step="0.01" min="0" name="payRate" defaultValue={e.payRate ?? ""} className={inputCls} />
+                  ) : (
+                    <ReadOnly value={e.payRate != null ? `$${e.payRate.toFixed(2)}` : null} />
+                  )}
+                </PLField>
+              )}
+
+              {canView(access, "billRate") && (
+                <PLField label="Bill Rate">
+                  {canEdit(access, "billRate") ? (
+                    <input type="number" step="0.01" min="0" name="billRate" defaultValue={e.billRate ?? ""} className={inputCls} />
+                  ) : (
+                    <ReadOnly value={e.billRate != null ? `$${e.billRate.toFixed(2)}` : null} />
+                  )}
+                </PLField>
+              )}
+
+              {canView(access, "frc") && (
+                <PLField label="FRC Needed / Size">
+                  {canEdit(access, "frc") ? (
+                    <div className="flex gap-2">
+                      <select name="frcNeeded" defaultValue={triValue(e.frcNeeded)} className={inputCls}>
+                        <option value="">—</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                      <input name="frcSize" defaultValue={e.frcSize ?? ""} placeholder="Size" className={inputCls} />
+                    </div>
+                  ) : (
+                    <ReadOnly
+                      value={
+                        e.frcNeeded == null
+                          ? null
+                          : e.frcNeeded
+                            ? `Yes${e.frcSize ? ` · ${e.frcSize}` : ""}`
+                            : "No"
+                      }
+                    />
+                  )}
+                </PLField>
+              )}
+
+              {canView(access, "creditCard") && (
+                <PLField label="Credit Card Approved">
+                  {canEdit(access, "creditCard") ? (
+                    <select name="creditCardApproved" defaultValue={triValue(e.creditCardApproved)} className={inputCls}>
+                      <option value="">—</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  ) : (
+                    <ReadOnly value={yesNoText(e.creditCardApproved)} />
+                  )}
+                </PLField>
+              )}
+
+              {canView(access, "emailNeeded") && (
+                <PLField label="Email Needed">
+                  {canEdit(access, "emailNeeded") ? (
+                    <select name="emailNeeded" defaultValue={triValue(e.emailNeeded)} className={inputCls}>
+                      <option value="">—</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  ) : (
+                    <ReadOnly value={yesNoText(e.emailNeeded)} />
+                  )}
+                </PLField>
+              )}
+
+              {canEditPL && (
+                <div className="sm:col-span-2">
+                  <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                    Save details
+                  </button>
+                </div>
+              )}
+            </form>
+          </section>
+        )}
+
+        {canLib && (
+        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">Details</h2>
+          <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <Detail label="Email" value={e.email} />
+            <Detail label="Phone" value={e.phone} />
+            <Detail label="SSN" value={e.ssn} />
+            <Detail label="Driver's license" value={e.driversLicenseNumber} />
+            <Detail label="Address" value={[e.addressLine1, e.addressLine2, e.city, e.state, e.zip].filter(Boolean).join(", ")} />
+            <Detail label="Safety Council ID" value={e.safetyCouncilId} />
+            <Detail label="TWIC #" value={e.twicNumber} />
+          </dl>
+        </section>
+        )}
+
+        {canLib && (
+        <>
+        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
+          <div className="mt-3 space-y-4">
+            {DOCUMENT_CATEGORIES.map((cat) => {
+              const docs = docsByCategory(cat.key);
+              return (
+                <div key={cat.key}>
+                  <h3 className="text-sm font-semibold text-gray-700">{cat.label}</h3>
+                  {docs.length === 0 ? (
+                    <p className="text-sm text-gray-400">No files</p>
+                  ) : (
+                    <ul className="mt-1 space-y-1">
+                      {docs.map((d) => (
+                        <li key={d.id}>
+                          <a href={`/api/files/${d.id}`} target="_blank" className="text-sm text-blue-600 hover:underline">
+                            {d.fileName}
+                          </a>
+                          <span className="ml-2 text-xs text-gray-400">
+                            {(d.size / 1024).toFixed(0)} KB
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {e.certifications.length > 0 && (
+          <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900">Certifications</h2>
+            <ul className="mt-3 space-y-1 text-sm text-gray-700">
+              {e.certifications.map((c) => (
+                <li key={c.id}>
+                  {c.name}
+                  {c.issuer ? ` · ${c.issuer}` : ""}
+                  {c.expiryDate ? ` · expires ${c.expiryDate.toISOString().slice(0, 10)}` : ""}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        </>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function Detail({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-gray-400">{label}</dt>
+      <dd className="text-gray-900">{value || "—"}</dd>
+    </div>
+  );
+}
+
+const inputCls = "rounded-md border border-gray-300 px-3 py-2 text-sm w-full";
+
+function fmtDate(d: Date | null) {
+  return d ? d.toISOString().slice(0, 10) : "—";
+}
+
+function triValue(v: boolean | null) {
+  return v === true ? "true" : v === false ? "false" : "";
+}
+
+function yesNoText(v: boolean | null) {
+  return v == null ? "—" : v ? "Yes" : "No";
+}
+
+function PLField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+function ReadOnly({ value }: { value?: string | null }) {
+  return <div className="text-gray-900">{value || "—"}</div>;
+}
