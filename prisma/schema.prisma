@@ -158,3 +158,56 @@ model OnboardingLink {
   expiresAt  DateTime?
   usedAt     DateTime?
 }
+
+// A billing client for a site/project. Invoices are sent to Client.email.
+model Client {
+  id        String    @id @default(cuid())
+  name      String
+  email     String
+  site      String
+  createdAt DateTime  @default(now())
+  invoices  Invoice[]
+}
+
+// An invoice built by a Project Manager, reviewed by an Account Manager, and
+// given final sign-off (which triggers the client email) by an Admin.
+// status: DRAFT | SUBMITTED | AM_APPROVED | ADMIN_APPROVED | SENT
+model Invoice {
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id])
+  site            String
+  status          String    @default("DRAFT")
+  createdByUserId String
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sentAt          DateTime?
+
+  lineItems   InvoiceLineItem[]
+  attachments InvoiceAttachment[]
+}
+
+// Free-form invoice line (description + amount), entered by the Project Manager.
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  description String
+  amount      Float
+  createdAt   DateTime @default(now())
+}
+
+// Files attached to an invoice (uploaded timesheets, generated grid exports, etc).
+// category: TIMESHEET | GRID_EXPORT | OTHER
+model InvoiceAttachment {
+  id         String   @id @default(cuid())
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId  String
+  category   String
+  fileName   String
+  storageKey String
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+}
