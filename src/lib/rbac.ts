@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 
-// The 8 application roles.
+// The 9 application roles.
 export const ROLES = [
   "EMPLOYEE",
   "TRACKS",
