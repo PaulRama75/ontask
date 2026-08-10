@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -29,15 +28,6 @@ export default async function InvoicesPage() {
   const allowedRoles = ["PROJECT_MANAGER", "ACCOUNT_MANAGER", "ADMIN", "SUPER_ADMIN"];
   if (!allowedRoles.includes(me.role)) redirect("/admin/grid");
 
-  let restrictedSites: Set<string> | null = null;
-  if (!isAdminRole(me.role)) {
-    const mine = await prisma.userSite.findMany({
-      where: { userId: me.id },
-      select: { site: true },
-    });
-    if (mine.length > 0) restrictedSites = new Set(mine.map((s) => s.site));
-  }
-
   const where =
     me.role === "PROJECT_MANAGER"
       ? { createdByUserId: me.id }
@@ -51,7 +41,7 @@ export default async function InvoicesPage() {
     include: { client: true, lineItems: true },
   });
 
-  const invoices = restrictedSites ? all.filter((inv) => restrictedSites!.has(inv.site)) : all;
+  const invoices = all;
 
   const th =
     "border border-gray-300 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600";
