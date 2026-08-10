@@ -167,6 +167,8 @@ model Client {
   site      String
   createdAt DateTime  @default(now())
   invoices  Invoice[]
+
+  @@unique([email, site])
 }
 
 // An invoice built by a Project Manager, reviewed by an Account Manager, and
