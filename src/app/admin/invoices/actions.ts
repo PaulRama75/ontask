@@ -26,6 +26,15 @@ async function requireAdminUser() {
   return me;
 }
 
+// Escapes user-controlled text before interpolating into notification/invoice HTML emails.
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export type CreateInvoiceResult = { ok: false; error: string } | undefined;
 
 export async function createInvoice(
@@ -271,7 +280,7 @@ export async function submitInvoice(form: FormData): Promise<void> {
     await sendEmail({
       to: am.email,
       subject: `Invoice ready for review — ${invoice.site}`,
-      html: `<p>A new invoice for ${invoice.site} is ready for your review.</p>`,
+      html: `<p>A new invoice for ${escapeHtml(invoice.site)} is ready for your review.</p>`,
     });
   }
 
@@ -295,7 +304,7 @@ export async function approveInvoice(form: FormData): Promise<void> {
     await sendEmail({
       to: admin.email,
       subject: `Invoice ready for final approval — ${invoice.site}`,
-      html: `<p>An invoice for ${invoice.site} was approved by the Account Manager and is ready for your final sign-off.</p>`,
+      html: `<p>An invoice for ${escapeHtml(invoice.site)} was approved by the Account Manager and is ready for your final sign-off.</p>`,
     });
   }
 
@@ -328,7 +337,7 @@ export async function rejectInvoice(form: FormData): Promise<void> {
     await sendEmail({
       to: creator.email,
       subject: `Invoice rejected — ${invoice.site}`,
-      html: `<p>Your invoice for ${invoice.site} was rejected.</p><p><strong>Reason:</strong> ${reason}</p><p>Please review and resubmit.</p>`,
+      html: `<p>Your invoice for ${escapeHtml(invoice.site)} was rejected.</p><p><strong>Reason:</strong> ${escapeHtml(reason)}</p><p>Please review and resubmit.</p>`,
     });
   }
 
@@ -356,11 +365,11 @@ export async function approveAndSend(form: FormData): Promise<void> {
   const rows = invoice.lineItems
     .map(
       (li) =>
-        `<tr><td>${li.description}</td><td style="text-align:right">$${li.amount.toFixed(2)}</td></tr>`,
+        `<tr><td>${escapeHtml(li.description)}</td><td style="text-align:right">$${li.amount.toFixed(2)}</td></tr>`,
     )
     .join("");
-  const html = `<p>Hello ${invoice.client.name},</p>
-<p>Please find your invoice for ${invoice.site} below.</p>
+  const html = `<p>Hello ${escapeHtml(invoice.client.name)},</p>
+<p>Please find your invoice for ${escapeHtml(invoice.site)} below.</p>
 <table cellpadding="6" style="border-collapse:collapse;width:100%">
 ${rows}
 <tr><td style="font-weight:bold">Total</td><td style="text-align:right;font-weight:bold">$${total.toFixed(2)}</td></tr>
