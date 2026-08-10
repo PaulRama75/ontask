@@ -74,7 +74,7 @@ export async function addLineItem(form: FormData): Promise<void> {
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new Error("Invoice not found");
-  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
   if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
   if (!description) throw new Error("A description is required.");
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive number.");
@@ -91,7 +91,8 @@ export async function deleteLineItem(form: FormData): Promise<void> {
     include: { invoice: true },
   });
   if (!lineItem) return;
-  if (lineItem.invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (lineItem.invoice.createdByUserId !== me.id && !isAdminRole(me.role))
+    throw new Error("Not authorized");
   if (lineItem.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
   await prisma.invoiceLineItem.delete({ where: { id } });
   revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
@@ -113,7 +114,7 @@ export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new Error("Invoice not found");
-  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
   if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
 
   const file = form.get("file");
@@ -150,7 +151,8 @@ export async function deleteInvoiceAttachment(form: FormData): Promise<void> {
     include: { invoice: true },
   });
   if (!att) return;
-  if (att.invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (att.invoice.createdByUserId !== me.id && !isAdminRole(me.role))
+    throw new Error("Not authorized");
   if (att.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
   await prisma.invoiceAttachment.delete({ where: { id } });
   revalidatePath(`/admin/invoices/${att.invoiceId}`);
@@ -244,7 +246,7 @@ export async function attachGridExport(form: FormData): Promise<void> {
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new Error("Invoice not found");
-  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
   if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
   if (employeeIds.length === 0) throw new Error("Select at least one employee to export.");
 
@@ -283,7 +285,7 @@ export async function submitInvoice(form: FormData): Promise<void> {
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id }, include: { lineItems: true } });
   if (!invoice) throw new Error("Invoice not found");
-  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
   if (invoice.status !== "DRAFT") throw new Error("Invoice already submitted.");
   if (invoice.lineItems.length === 0) throw new Error("Add at least one line item before submitting.");
 

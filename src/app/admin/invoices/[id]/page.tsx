@@ -41,14 +41,14 @@ export default async function InvoiceDetailPage({
 
   const isAM = me.role === "ACCOUNT_MANAGER";
   const isAdmin = isAdminRole(me.role);
-  // Owner = whoever created it, whether that's a PM or an admin acting as one
-  // (admins can create/edit invoices too, same as they can bypass restrictions
-  // everywhere else in this app).
-  const isOwner = invoice.createdByUserId === me.id && (me.role === "PROJECT_MANAGER" || isAdmin);
-  // AMs only ever act on SUBMITTED/AM_APPROVED invoices (see Task 9's Actions
-  // section) — viewing a DRAFT serves no purpose and would let an AM see a
-  // PM's in-progress invoice by guessing/sharing its URL before it's ready.
-  const canView = isOwner || isAdmin || (isAM && invoice.status !== "DRAFT");
+  // Owner = whoever may edit this DRAFT: the PM who created it, or ANY admin
+  // (admins can fully manage every invoice, same as they bypass restrictions
+  // everywhere else in this app — not just the ones they personally created).
+  const isOwner = isAdmin || (me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id);
+  // AMs only ever act on SUBMITTED/AM_APPROVED invoices (see the Actions
+  // section below) — viewing a DRAFT serves no purpose and would let an AM
+  // see a PM's in-progress invoice by guessing/sharing its URL before it's ready.
+  const canView = isOwner || (isAM && invoice.status !== "DRAFT");
   if (!canView) redirect("/admin/invoices");
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwner;
@@ -235,7 +235,7 @@ export default async function InvoiceDetailPage({
               </p>
             )}
 
-            {isAM && invoice.status === "SUBMITTED" && (
+            {(isAM || isAdmin) && invoice.status === "SUBMITTED" && (
               <form action={approveInvoice}>
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
