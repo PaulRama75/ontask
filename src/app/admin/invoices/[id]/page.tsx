@@ -3,7 +3,13 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole } from "@/lib/rbac";
-import { addLineItem, deleteLineItem, uploadInvoiceAttachment, deleteInvoiceAttachment } from "../actions";
+import {
+  addLineItem,
+  deleteLineItem,
+  uploadInvoiceAttachment,
+  deleteInvoiceAttachment,
+  attachGridExport,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +51,15 @@ export default async function InvoiceDetailPage({
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwnerPM;
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
+
+  let siteEmployees: { id: string; firstName: string | null; lastName: string | null }[] = [];
+  if (isDraftEditable) {
+    siteEmployees = await prisma.employee.findMany({
+      where: { site: invoice.site },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: { lastName: "asc" },
+    });
+  }
 
   const th = "px-2 py-1 text-left text-xs font-semibold uppercase text-gray-500";
   const td = "px-2 py-1.5 text-gray-800";
@@ -171,6 +186,27 @@ export default async function InvoiceDetailPage({
                 className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-900"
               >
                 Upload
+              </button>
+            </form>
+          )}
+
+          {isDraftEditable && siteEmployees.length > 0 && (
+            <form action={attachGridExport} className="mt-6 border-t border-gray-100 pt-4">
+              <input type="hidden" name="invoiceId" value={invoice.id} />
+              <p className="text-sm font-medium text-gray-700">Attach a grid snapshot for {invoice.site}</p>
+              <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
+                {siteEmployees.map((e) => (
+                  <label key={e.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="employeeIds" value={e.id} defaultChecked />
+                    {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
+                  </label>
+                ))}
+              </div>
+              <button
+                type="submit"
+                className="mt-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Attach grid snapshot
               </button>
             </form>
           )}
