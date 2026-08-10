@@ -55,3 +55,34 @@ export async function createInvoice(
   revalidatePath("/admin/invoices");
   redirect(`/admin/invoices/${invoice.id}`);
 }
+
+export async function addLineItem(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const invoiceId = String(form.get("invoiceId") ?? "");
+  const description = String(form.get("description") ?? "").trim();
+  const amount = Number(form.get("amount") ?? "");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+  if (!description) throw new Error("A description is required.");
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive number.");
+
+  await prisma.invoiceLineItem.create({ data: { invoiceId, description, amount } });
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+}
+
+export async function deleteLineItem(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const id = String(form.get("lineItemId") ?? "");
+  const lineItem = await prisma.invoiceLineItem.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+  if (!lineItem) return;
+  if (lineItem.invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (lineItem.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+  await prisma.invoiceLineItem.delete({ where: { id } });
+  revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
+}
