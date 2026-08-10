@@ -86,3 +86,52 @@ export async function deleteLineItem(form: FormData): Promise<void> {
   await prisma.invoiceLineItem.delete({ where: { id } });
   revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
 }
+
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 MB
+
+export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const invoiceId = String(form.get("invoiceId") ?? "");
+  const category = String(form.get("category") ?? "OTHER");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) return;
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`"${file.name}" exceeds the 15 MB limit.`);
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const saved = await saveInvoiceFile(buffer, file.name, { invoiceId, category });
+
+  await prisma.invoiceAttachment.create({
+    data: {
+      invoiceId,
+      category,
+      fileName: file.name,
+      storageKey: saved.storageKey,
+      mimeType: file.type || "application/octet-stream",
+      size: saved.size,
+    },
+  });
+
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+}
+
+export async function deleteInvoiceAttachment(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const id = String(form.get("attachmentId") ?? "");
+  const att = await prisma.invoiceAttachment.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+  if (!att) return;
+  if (att.invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (att.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+  await prisma.invoiceAttachment.delete({ where: { id } });
+  revalidatePath(`/admin/invoices/${att.invoiceId}`);
+}

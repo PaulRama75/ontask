@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole } from "@/lib/rbac";
-import { addLineItem, deleteLineItem } from "../actions";
+import { addLineItem, deleteLineItem, uploadInvoiceAttachment, deleteInvoiceAttachment } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -130,6 +130,47 @@ export default async function InvoiceDetailPage({
                 className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-900"
               >
                 Add
+              </button>
+            </form>
+          )}
+        </section>
+
+        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">Attachments</h2>
+          <ul className="mt-3 space-y-1 text-sm">
+            {invoice.attachments.length === 0 && <li className="text-gray-400">No attachments yet.</li>}
+            {invoice.attachments.map((att) => (
+              <li key={att.id} className="flex items-center justify-between">
+                <a
+                  href={`/api/invoice-files/${att.id}`}
+                  target="_blank"
+                  className="text-blue-600 hover:underline"
+                >
+                  {att.fileName} <span className="text-xs text-gray-400">({att.category})</span>
+                </a>
+                {isDraftEditable && (
+                  <form action={deleteInvoiceAttachment}>
+                    <input type="hidden" name="attachmentId" value={att.id} />
+                    <button className="text-xs text-red-600 hover:underline">Remove</button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {isDraftEditable && (
+            <form action={uploadInvoiceAttachment} className="mt-4 flex items-center gap-2">
+              <input type="hidden" name="invoiceId" value={invoice.id} />
+              <select name="category" className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+                <option value="TIMESHEET">Timesheet</option>
+                <option value="OTHER">Other</option>
+              </select>
+              <input type="file" name="file" required className="text-sm" />
+              <button
+                type="submit"
+                className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-900"
+              >
+                Upload
               </button>
             </form>
           )}
