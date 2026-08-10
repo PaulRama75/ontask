@@ -60,6 +60,29 @@ export async function saveFile(
   throw new Error(`Storage driver "${DRIVER}" not implemented yet`);
 }
 
+// Organizes invoice attachments as:
+//   invoices/<invoiceId>/<CATEGORY>-<unique>-<original-filename>
+export async function saveInvoiceFile(
+  buffer: Buffer,
+  originalName: string,
+  opts: { invoiceId: string; category: string },
+): Promise<SavedFile> {
+  const ext = path.extname(originalName);
+  const baseName = slug(path.basename(originalName, ext), "file") + ext;
+  const category = slug(opts.category, "OTHER");
+  const unique = randomUUID().slice(0, 8);
+  const key = `invoices/${opts.invoiceId}/${category}-${unique}-${baseName}`;
+
+  if (DRIVER === "LOCAL") {
+    const dest = localPathFor(key);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, buffer);
+    return { storageKey: key, size: buffer.length };
+  }
+
+  throw new Error(`Storage driver "${DRIVER}" not implemented yet`);
+}
+
 export async function getFile(
   key: string,
 ): Promise<{ buffer: Buffer } | null> {
