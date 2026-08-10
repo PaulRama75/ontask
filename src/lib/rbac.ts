@@ -109,6 +109,9 @@ export function defaultAccess(role: Role, columnKey: string): ColumnAccess {
     case "ACCOUNT_MANAGER":
       if (columnKey === "ssn") return { level: "HIDDEN", canApprove: false };
       return { level: "VIEW", canApprove: false };
+    case "PROJECT_MANAGER":
+      if (columnKey === "ssn") return { level: "HIDDEN", canApprove: false };
+      return { level: "VIEW", canApprove: false };
     case "TRACKS":
       if (["ssn", "payRate", "billRate"].includes(columnKey))
         return { level: "HIDDEN", canApprove: false };
