@@ -4,15 +4,31 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { STATUS_LABEL, STATUS_STYLE } from "./statusLabels";
+import InvoiceControls from "./InvoiceControls";
 
 export const dynamic = "force-dynamic";
 
-export default async function InvoicesPage() {
+const SORT_KEYS = ["site", "client", "total", "status", "createdAt"] as const;
+type SortKey = (typeof SORT_KEYS)[number];
+
+function isSortKey(v: string): v is SortKey {
+  return (SORT_KEYS as readonly string[]).includes(v);
+}
+
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; sort?: string; dir?: string }>;
+}) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
 
   const nav = await getNavAccess(me.role);
   if (!nav.invoices) redirect(firstAllowedNavHref(nav));
+
+  const { q = "", status = "all", sort: sortParam, dir: dirParam } = await searchParams;
+  const sort: SortKey = sortParam && isSortKey(sortParam) ? sortParam : "createdAt";
+  const dir: "asc" | "desc" = dirParam === "asc" ? "asc" : "desc";
 
   const where =
     me.role === "PROJECT_MANAGER"
@@ -23,15 +39,69 @@ export default async function InvoicesPage() {
 
   const all = await prisma.invoice.findMany({
     where,
-    orderBy: { createdAt: "desc" },
     include: { client: true, lineItems: true },
   });
 
-  const invoices = all;
+  const withTotals = all.map((inv) => ({
+    ...inv,
+    total: inv.lineItems.reduce((sum, li) => sum + li.amount, 0),
+  }));
+
+  const needle = q.trim().toLowerCase();
+  const filtered = withTotals.filter((inv) => {
+    if (status !== "all" && inv.status !== status) return false;
+    if (needle) {
+      const haystack = `${inv.site} ${inv.client.name}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
+    return true;
+  });
+
+  const sign = dir === "asc" ? 1 : -1;
+  const invoices = [...filtered].sort((a, b) => {
+    switch (sort) {
+      case "site":
+        return sign * a.site.localeCompare(b.site);
+      case "client":
+        return sign * a.client.name.localeCompare(b.client.name);
+      case "total":
+        return sign * (a.total - b.total);
+      case "status":
+        return sign * a.status.localeCompare(b.status);
+      case "createdAt":
+      default:
+        return sign * (a.createdAt.getTime() - b.createdAt.getTime());
+    }
+  });
 
   const th =
     "border border-gray-300 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600";
   const td = "border border-gray-300 px-3 py-2 align-top text-gray-800";
+
+  // Builds an href that toggles sort direction on this column while
+  // preserving the current search/status filters.
+  function sortHref(key: SortKey): string {
+    const sp = new URLSearchParams();
+    if (q.trim()) sp.set("q", q.trim());
+    if (status !== "all") sp.set("status", status);
+    sp.set("sort", key);
+    sp.set("dir", sort === key && dir === "asc" ? "desc" : "asc");
+    return `/admin/invoices?${sp.toString()}`;
+  }
+
+  function SortHeader({ sortKey, label }: { sortKey: SortKey; label: string }) {
+    const active = sort === sortKey;
+    return (
+      <th className={th}>
+        <Link href={sortHref(sortKey)} className="flex items-center gap-1 hover:text-gray-900">
+          {label}
+          <span className={active ? "text-gray-700" : "text-gray-300"}>
+            {active ? (dir === "asc" ? "▲" : "▼") : "▲"}
+          </span>
+        </Link>
+      </th>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -55,27 +125,33 @@ export default async function InvoicesPage() {
           )}
         </div>
 
+        <InvoiceControls
+          total={all.length}
+          shown={invoices.length}
+          statusOptions={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
+        />
+
         <div className="overflow-x-auto rounded-lg border border-gray-300 bg-white shadow-sm">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className={th}>Site</th>
-                <th className={th}>Client</th>
-                <th className={th}>Total</th>
-                <th className={th}>Status</th>
-                <th className={th}>Created</th>
+                <SortHeader sortKey="site" label="Site" />
+                <SortHeader sortKey="client" label="Client" />
+                <SortHeader sortKey="total" label="Total" />
+                <SortHeader sortKey="status" label="Status" />
+                <SortHeader sortKey="createdAt" label="Created" />
               </tr>
             </thead>
             <tbody>
               {invoices.length === 0 && (
                 <tr>
                   <td className={`${td} text-center text-gray-400`} colSpan={5}>
-                    No invoices yet.
+                    {all.length === 0 ? "No invoices yet." : "No invoices match your search/filter."}
                   </td>
                 </tr>
               )}
               {invoices.map((inv) => {
-                const total = inv.lineItems.reduce((sum, li) => sum + li.amount, 0);
+                const total = inv.total;
                 return (
                   <tr key={inv.id}>
                     <td className={td}>
