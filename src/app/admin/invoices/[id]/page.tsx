@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole } from "@/lib/rbac";
+import { STATUS_LABEL } from "../statusLabels";
 import {
   addLineItem,
   deleteLineItem,
@@ -16,14 +17,6 @@ import {
 } from "../actions";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draft",
-  SUBMITTED: "Submitted",
-  AM_APPROVED: "AM Approved",
-  ADMIN_APPROVED: "Admin Approved (sending)",
-  SENT: "Sent",
-};
 
 export default async function InvoiceDetailPage({
   params,
