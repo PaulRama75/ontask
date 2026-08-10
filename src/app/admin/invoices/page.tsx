@@ -10,7 +10,7 @@ const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft",
   SUBMITTED: "Submitted",
   AM_APPROVED: "AM Approved",
-  ADMIN_APPROVED: "Admin Approved",
+  ADMIN_APPROVED: "Admin Approved (sending)",
   SENT: "Sent",
 };
 

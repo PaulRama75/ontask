@@ -37,7 +37,11 @@ export default async function InvoiceDetailPage({
   const isOwnerPM = me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id;
   const isAM = me.role === "ACCOUNT_MANAGER";
   const isAdmin = isAdminRole(me.role);
-  if (!isOwnerPM && !isAM && !isAdmin) redirect("/admin/invoices");
+  // AMs only ever act on SUBMITTED/AM_APPROVED invoices (see Task 9's Actions
+  // section) — viewing a DRAFT serves no purpose and would let an AM see a
+  // PM's in-progress invoice by guessing/sharing its URL before it's ready.
+  const canView = isOwnerPM || isAdmin || (isAM && invoice.status !== "DRAFT");
+  if (!canView) redirect("/admin/invoices");
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwnerPM;
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
