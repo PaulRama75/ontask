@@ -158,7 +158,10 @@ export async function deleteInvoiceAttachment(form: FormData): Promise<void> {
 const EXPORT_KEYS = COLUMN_KEYS.filter((k) => k !== "library");
 
 function csvField(v: string): string {
-  return `"${v.replace(/"/g, '""')}"`;
+  // Prefix a leading =, +, -, or @ with a tab to prevent CSV formula injection
+  // when the file is opened in Excel/Google Sheets.
+  const safe = /^[=+\-@]/.test(v) ? `\t${v}` : v;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 type ExportEmployee = {
