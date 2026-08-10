@@ -217,7 +217,7 @@ export default async function InvoiceDetailPage({
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">Actions</h2>
           <div className="mt-3 flex flex-wrap gap-3">
-            {isDraftEditable && (
+            {isDraftEditable && invoice.lineItems.length > 0 && (
               <form action={submitInvoice}>
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
@@ -227,6 +227,12 @@ export default async function InvoiceDetailPage({
                   Submit for review
                 </button>
               </form>
+            )}
+
+            {isDraftEditable && invoice.lineItems.length === 0 && (
+              <p className="self-center text-sm text-gray-400">
+                Add at least one line item before you can submit.
+              </p>
             )}
 
             {isAM && invoice.status === "SUBMITTED" && (
