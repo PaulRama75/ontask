@@ -9,6 +9,10 @@ import {
   uploadInvoiceAttachment,
   deleteInvoiceAttachment,
   attachGridExport,
+  submitInvoice,
+  approveInvoice,
+  rejectInvoice,
+  approveAndSend,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -210,6 +214,66 @@ export default async function InvoiceDetailPage({
               </button>
             </form>
           )}
+        </section>
+
+        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">Actions</h2>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {isDraftEditable && (
+              <form action={submitInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  Submit for review
+                </button>
+              </form>
+            )}
+
+            {isAM && invoice.status === "SUBMITTED" && (
+              <form action={approveInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                >
+                  Approve
+                </button>
+              </form>
+            )}
+
+            {isAdmin && (invoice.status === "AM_APPROVED" || invoice.status === "ADMIN_APPROVED") && (
+              <form action={approveAndSend}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                >
+                  {invoice.status === "ADMIN_APPROVED" ? "Retry send to client" : "Approve & send to client"}
+                </button>
+              </form>
+            )}
+
+            {((isAM && invoice.status === "SUBMITTED") ||
+              (isAdmin && (invoice.status === "SUBMITTED" || invoice.status === "AM_APPROVED"))) && (
+              <form action={rejectInvoice} className="flex items-center gap-2">
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <input
+                  name="reason"
+                  placeholder="Rejection reason"
+                  required
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                >
+                  Reject
+                </button>
+              </form>
+            )}
+          </div>
         </section>
       </div>
     </main>

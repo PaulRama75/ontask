@@ -254,3 +254,140 @@ export async function attachGridExport(form: FormData): Promise<void> {
 
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
+
+export async function submitInvoice(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id }, include: { lineItems: true } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.createdByUserId !== me.id) throw new Error("Not authorized");
+  if (invoice.status !== "DRAFT") throw new Error("Invoice already submitted.");
+  if (invoice.lineItems.length === 0) throw new Error("Add at least one line item before submitting.");
+
+  await prisma.invoice.update({ where: { id }, data: { status: "SUBMITTED" } });
+
+  const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
+  for (const am of ams) {
+    await sendEmail({
+      to: am.email,
+      subject: `Invoice ready for review — ${invoice.site}`,
+      html: `<p>A new invoice for ${invoice.site} is ready for your review.</p>`,
+    });
+  }
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
+export async function approveInvoice(form: FormData): Promise<void> {
+  await requireAM();
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.status !== "SUBMITTED") throw new Error("Invoice must be submitted before it can be approved.");
+
+  await prisma.invoice.update({ where: { id }, data: { status: "AM_APPROVED", rejectionReason: null } });
+
+  const admins = await prisma.user.findMany({
+    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
+  });
+  for (const admin of admins) {
+    await sendEmail({
+      to: admin.email,
+      subject: `Invoice ready for final approval — ${invoice.site}`,
+      html: `<p>An invoice for ${invoice.site} was approved by the Account Manager and is ready for your final sign-off.</p>`,
+    });
+  }
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
+export async function rejectInvoice(form: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
+  const id = String(form.get("invoiceId") ?? "");
+  const reason = String(form.get("reason") ?? "").trim();
+  if (!reason) throw new Error("A rejection reason is required.");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+
+  const isAM = me.role === "ACCOUNT_MANAGER";
+  const admin = isAdminRole(me.role);
+  const canRejectSubmitted = invoice.status === "SUBMITTED" && (isAM || admin);
+  const canRejectAmApproved = invoice.status === "AM_APPROVED" && admin;
+  if (!canRejectSubmitted && !canRejectAmApproved) {
+    throw new Error("Not authorized to reject this invoice at its current status.");
+  }
+
+  await prisma.invoice.update({ where: { id }, data: { status: "DRAFT", rejectionReason: reason } });
+
+  const creator = await prisma.user.findUnique({ where: { id: invoice.createdByUserId } });
+  if (creator) {
+    await sendEmail({
+      to: creator.email,
+      subject: `Invoice rejected — ${invoice.site}`,
+      html: `<p>Your invoice for ${invoice.site} was rejected.</p><p><strong>Reason:</strong> ${reason}</p><p>Please review and resubmit.</p>`,
+    });
+  }
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
+export async function approveAndSend(form: FormData): Promise<void> {
+  await requireAdminUser();
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({
+    where: { id },
+    include: { client: true, lineItems: true, attachments: true },
+  });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.status !== "AM_APPROVED" && invoice.status !== "ADMIN_APPROVED") {
+    throw new Error("Invoice must be Account-Manager approved before it can be sent.");
+  }
+
+  if (invoice.status === "AM_APPROVED") {
+    await prisma.invoice.update({ where: { id }, data: { status: "ADMIN_APPROVED" } });
+  }
+
+  const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
+  const rows = invoice.lineItems
+    .map(
+      (li) =>
+        `<tr><td>${li.description}</td><td style="text-align:right">$${li.amount.toFixed(2)}</td></tr>`,
+    )
+    .join("");
+  const html = `<p>Hello ${invoice.client.name},</p>
+<p>Please find your invoice for ${invoice.site} below.</p>
+<table cellpadding="6" style="border-collapse:collapse;width:100%">
+${rows}
+<tr><td style="font-weight:bold">Total</td><td style="text-align:right;font-weight:bold">$${total.toFixed(2)}</td></tr>
+</table>
+<p>Supporting documents are attached.</p>`;
+
+  const attachments: { filename: string; content: string }[] = [];
+  for (const att of invoice.attachments) {
+    const file = await getFile(att.storageKey);
+    if (file) attachments.push({ filename: att.fileName, content: file.buffer.toString("base64") });
+  }
+
+  const sent = await sendEmail({
+    to: invoice.client.email,
+    subject: `Invoice — ${invoice.site}`,
+    html,
+    attachments,
+  });
+
+  if (sent) {
+    await prisma.invoice.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
+  }
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+
+  if (!sent) {
+    throw new Error("Email to the client failed to send. The invoice is approved — click Send again to retry.");
+  }
+}
