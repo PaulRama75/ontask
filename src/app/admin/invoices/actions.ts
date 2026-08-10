@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 
 async function requirePM() {
   const me = await getCurrentUser();
-  if (!me || me.role !== "PROJECT_MANAGER") throw new Error("Not authorized");
+  if (!me || (me.role !== "PROJECT_MANAGER" && !isAdminRole(me.role))) throw new Error("Not authorized");
   return me;
 }
 

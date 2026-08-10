@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdminRole } from "@/lib/rbac";
 import { STATUS_LABEL, STATUS_STYLE } from "./statusLabels";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export default async function InvoicesPage() {
                 : "Invoices awaiting or past your review."}
             </p>
           </div>
-          {me.role === "PROJECT_MANAGER" && (
+          {(me.role === "PROJECT_MANAGER" || isAdminRole(me.role)) && (
             <Link
               href="/admin/invoices/new"
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"

@@ -37,16 +37,19 @@ export default async function InvoiceDetailPage({
   });
   if (!invoice) notFound();
 
-  const isOwnerPM = me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id;
   const isAM = me.role === "ACCOUNT_MANAGER";
   const isAdmin = isAdminRole(me.role);
+  // Owner = whoever created it, whether that's a PM or an admin acting as one
+  // (admins can create/edit invoices too, same as they can bypass restrictions
+  // everywhere else in this app).
+  const isOwner = invoice.createdByUserId === me.id && (me.role === "PROJECT_MANAGER" || isAdmin);
   // AMs only ever act on SUBMITTED/AM_APPROVED invoices (see Task 9's Actions
   // section) — viewing a DRAFT serves no purpose and would let an AM see a
   // PM's in-progress invoice by guessing/sharing its URL before it's ready.
-  const canView = isOwnerPM || isAdmin || (isAM && invoice.status !== "DRAFT");
+  const canView = isOwner || isAdmin || (isAM && invoice.status !== "DRAFT");
   if (!canView) redirect("/admin/invoices");
 
-  const isDraftEditable = invoice.status === "DRAFT" && isOwnerPM;
+  const isDraftEditable = invoice.status === "DRAFT" && isOwner;
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
 
   let siteEmployees: { id: string; firstName: string | null; lastName: string | null }[] = [];
