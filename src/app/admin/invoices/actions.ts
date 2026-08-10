@@ -97,6 +97,13 @@ export async function deleteLineItem(form: FormData): Promise<void> {
 }
 
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 MB
+const ALLOWED_ATTACHMENT_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/webp",
+]);
 
 export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
   const me = await requirePM();
@@ -112,6 +119,9 @@ export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
   if (!(file instanceof File) || file.size === 0) return;
   if (file.size > MAX_ATTACHMENT_BYTES) {
     throw new Error(`"${file.name}" exceeds the 15 MB limit.`);
+  }
+  if (file.type && !ALLOWED_ATTACHMENT_MIME.has(file.type)) {
+    throw new Error(`"${file.name}" must be a PDF or image.`);
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
