@@ -6,11 +6,14 @@ import {
   ROLE_LABELS,
   isAdminRole,
   getAccessMap,
+  getNavAccess,
   COLUMNS,
+  NAV_ITEMS,
   type Role,
 } from "@/lib/rbac";
-import { saveRoleAccess } from "./actions";
+import { saveRoleAccess, saveNavAccess } from "./actions";
 import AccessMatrix from "./AccessMatrix";
+import NavAccessMatrix from "./NavAccessMatrix";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,7 @@ export default async function AccessPage({
     roleParam && ROLES.includes(roleParam as Role) ? (roleParam as Role) : "EMPLOYEE";
 
   const map = await getAccessMap(role);
+  const navMap = await getNavAccess(role);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
@@ -58,15 +62,29 @@ export default async function AccessPage({
 
       {role === "SUPER_ADMIN" ? (
         <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Super Admin has full edit and approve access on every column. This cannot be changed.
+          Super Admin has full access to every column and every section. This cannot be changed.
         </p>
       ) : (
-        <AccessMatrix
-          role={role}
-          columns={COLUMNS.map((c) => ({ key: c.key, label: c.label }))}
-          map={map}
-          action={saveRoleAccess}
-        />
+        <>
+          <h2 className="mt-8 text-lg font-semibold text-gray-900">Navigation</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Which top-level sections this role sees in the header — and can open at all.
+          </p>
+          <NavAccessMatrix
+            role={role}
+            items={NAV_ITEMS.map((n) => ({ key: n.key, label: n.label }))}
+            map={navMap}
+            action={saveNavAccess}
+          />
+
+          <h2 className="mt-8 text-lg font-semibold text-gray-900">Employee grid columns</h2>
+          <AccessMatrix
+            role={role}
+            columns={COLUMNS.map((c) => ({ key: c.key, label: c.label }))}
+            map={map}
+            action={saveRoleAccess}
+          />
+        </>
       )}
     </main>
   );

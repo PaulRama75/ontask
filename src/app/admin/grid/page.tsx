@@ -2,7 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canView, canEdit, canApprove, isAdminRole } from "@/lib/rbac";
+import {
+  getAccessMap,
+  canView,
+  canEdit,
+  canApprove,
+  isAdminRole,
+  getNavAccess,
+  firstAllowedNavHref,
+} from "@/lib/rbac";
 import { setApproved, setActive } from "../actions";
 import GridControls from "./GridControls";
 import SiteCell from "./SiteCell";
@@ -60,6 +68,8 @@ export default async function GridPage({
 }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  const nav = await getNavAccess(me.role);
+  if (!nav.grid) redirect(firstAllowedNavHref(nav));
   const access = await getAccessMap(me.role);
   const show = (k: string) => canView(access, k);
   const editable = (k: string) => canEdit(access, k);

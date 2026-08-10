@@ -153,3 +153,58 @@ export function canEdit(a: AccessMap, key: string): boolean {
 export function canApprove(a: AccessMap, key: string): boolean {
   return !!a[key]?.canApprove;
 }
+
+// Top-level nav sections whose visibility is admin-configurable per role.
+// Users / Access Control / Site Access are NOT here — those stay hardcoded
+// admin-only in the layout, so an admin can never lock themselves out of
+// the access-management pages themselves.
+export const NAV_ITEMS = [
+  { key: "grid", label: "Data Grid", href: "/admin/grid" },
+  { key: "onboarding", label: "Onboarding", href: "/admin" },
+  { key: "invoices", label: "Invoices", href: "/admin/invoices" },
+] as const;
+
+export type NavKey = (typeof NAV_ITEMS)[number]["key"];
+export type NavAccessMap = Record<NavKey, boolean>;
+
+// Rollout defaults: Data Grid/Onboarding stay visible to everyone (unchanged
+// from before this feature existed); Invoices keeps its prior hardcoded
+// role list, so nothing changes for existing users until an Admin adjusts it.
+export function defaultNavVisible(role: Role, navKey: NavKey): boolean {
+  if (role === "SUPER_ADMIN") return true;
+  switch (navKey) {
+    case "grid":
+    case "onboarding":
+      return true;
+    case "invoices":
+      return (
+        role === "PROJECT_MANAGER" || role === "ACCOUNT_MANAGER" || isAdminRole(role)
+      );
+    default:
+      return false;
+  }
+}
+
+// Resolve the effective nav-visibility map for a role from the DB, falling
+// back to defaultNavVisible(). Super Admin always sees everything.
+export async function getNavAccess(role: string): Promise<NavAccessMap> {
+  if (role === "SUPER_ADMIN") {
+    return Object.fromEntries(NAV_ITEMS.map((n) => [n.key, true])) as NavAccessMap;
+  }
+  const rows = await prisma.navAccess.findMany({ where: { role } });
+  const byKey = new Map(rows.map((r) => [r.navKey, r.visible]));
+  const map = {} as NavAccessMap;
+  for (const item of NAV_ITEMS) {
+    map[item.key] = byKey.has(item.key)
+      ? byKey.get(item.key)!
+      : defaultNavVisible(role as Role, item.key);
+  }
+  return map;
+}
+
+// Where to send a user who hit a nav-gated page they're not allowed to see:
+// the first section they ARE allowed into, or /login as a harmless dead end
+// if a role has been configured with no visible sections at all.
+export function firstAllowedNavHref(nav: NavAccessMap): string {
+  return NAV_ITEMS.find((item) => nav[item.key])?.href ?? "/login";
+}

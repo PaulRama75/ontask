@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { STATUS_LABEL, STATUS_STYLE } from "./statusLabels";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,8 @@ export default async function InvoicesPage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
 
-  const allowedRoles = ["PROJECT_MANAGER", "ACCOUNT_MANAGER", "ADMIN", "SUPER_ADMIN"];
-  if (!allowedRoles.includes(me.role)) redirect("/admin/grid");
+  const nav = await getNavAccess(me.role);
+  if (!nav.invoices) redirect(firstAllowedNavHref(nav));
 
   const where =
     me.role === "PROJECT_MANAGER"

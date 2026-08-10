@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { STATUS_LABEL } from "../statusLabels";
 import {
   addLineItem,
@@ -25,6 +25,8 @@ export default async function InvoiceDetailPage({
 }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  const nav = await getNavAccess(me.role);
+  if (!nav.invoices) redirect(firstAllowedNavHref(nav));
   const { id } = await params;
 
   const invoice = await prisma.invoice.findUnique({

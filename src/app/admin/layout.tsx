@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser, destroySession } from "@/lib/auth";
-import { isAdminRole, ROLE_LABELS, type Role } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, NAV_ITEMS, ROLE_LABELS, type Role } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!user) redirect("/login");
 
   const admin = isAdminRole(user.role);
+  const nav = await getNavAccess(user.role);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -25,17 +26,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             FER
           </Link>
           <nav className="flex items-center gap-4 text-sm">
-            <Link href="/admin/grid" className="text-gray-600 hover:text-gray-900">
-              Data Grid
-            </Link>
-            <Link href="/admin" className="text-gray-600 hover:text-gray-900">
-              Onboarding
-            </Link>
-            {["PROJECT_MANAGER", "ACCOUNT_MANAGER", "ADMIN", "SUPER_ADMIN"].includes(user.role) && (
-              <Link href="/admin/invoices" className="text-gray-600 hover:text-gray-900">
-                Invoices
+            {NAV_ITEMS.filter((item) => nav[item.key]).map((item) => (
+              <Link key={item.key} href={item.href} className="text-gray-600 hover:text-gray-900">
+                {item.label}
               </Link>
-            )}
+            ))}
             {admin && (
               <>
                 <Link href="/admin/users" className="text-gray-600 hover:text-gray-900">

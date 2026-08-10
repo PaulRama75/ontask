@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import NewInvoiceForm from "./NewInvoiceForm";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 export default async function NewInvoicePage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  const nav = await getNavAccess(me.role);
+  if (!nav.invoices) redirect(firstAllowedNavHref(nav));
   if (me.role !== "PROJECT_MANAGER" && !isAdminRole(me.role)) redirect("/admin/invoices");
 
   return (

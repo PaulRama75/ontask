@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
+import { getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { createOnboardingLink } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +10,11 @@ export const dynamic = "force-dynamic";
 const base = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
 export default async function AdminPage() {
+  const me = await getCurrentUser();
+  if (!me) redirect("/login");
+  const nav = await getNavAccess(me.role);
+  if (!nav.onboarding) redirect(firstAllowedNavHref(nav));
+
   const [employees, projectLeads] = await Promise.all([
     prisma.employee.findMany({
       orderBy: { createdAt: "desc" },

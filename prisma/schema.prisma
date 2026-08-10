@@ -148,6 +148,18 @@ model ColumnAccess {
   @@unique([role, columnKey])
 }
 
+// Per-role visibility for a top-level nav item. level: whether the role sees
+// (and can access) that section of the app. Super Admin always sees everything
+// and is not editable here, same rule as ColumnAccess.
+model NavAccess {
+  id      String  @id @default(cuid())
+  role    String
+  navKey  String
+  visible Boolean @default(false)
+
+  @@unique([role, navKey])
+}
+
 // A unique tokenized link sent to an employee to complete onboarding.
 model OnboardingLink {
   id         String    @id @default(cuid())

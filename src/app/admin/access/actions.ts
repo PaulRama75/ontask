@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, ROLES, COLUMN_KEYS, LEVELS, type Level } from "@/lib/rbac";
+import { isAdminRole, ROLES, COLUMN_KEYS, LEVELS, NAV_ITEMS, type Level } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 
 async function requireAdmin() {
@@ -37,5 +37,30 @@ export async function saveRoleAccess(form: FormData): Promise<AccessActionResult
 
   revalidatePath("/admin/access");
   revalidatePath("/admin/grid");
+  return { ok: true };
+}
+
+// Save the full nav-visibility map for a single role.
+// Expects a "visible_<navKey>" checkbox field for each nav item; unchecked = hidden.
+export async function saveNavAccess(form: FormData): Promise<AccessActionResult> {
+  await requireAdmin();
+
+  const role = String(form.get("role") ?? "");
+  if (!ROLES.includes(role as (typeof ROLES)[number]))
+    return { ok: false, error: "Invalid role." };
+  if (role === "SUPER_ADMIN")
+    return { ok: false, error: "Super Admin always has full access and cannot be changed." };
+
+  for (const item of NAV_ITEMS) {
+    const visible = form.get(`visible_${item.key}`) === "on";
+    await prisma.navAccess.upsert({
+      where: { role_navKey: { role, navKey: item.key } },
+      update: { visible },
+      create: { role, navKey: item.key, visible },
+    });
+  }
+
+  revalidatePath("/admin/access");
+  revalidatePath("/admin");
   return { ok: true };
 }
