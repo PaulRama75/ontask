@@ -71,6 +71,7 @@ export default async function AccessPage({
             Which top-level sections this role sees in the header — and can open at all.
           </p>
           <NavAccessMatrix
+            key={`nav-${role}`}
             role={role}
             items={NAV_ITEMS.map((n) => ({ key: n.key, label: n.label }))}
             map={navMap}
@@ -79,6 +80,7 @@ export default async function AccessPage({
 
           <h2 className="mt-8 text-lg font-semibold text-gray-900">Employee grid columns</h2>
           <AccessMatrix
+            key={`columns-${role}`}
             role={role}
             columns={COLUMNS.map((c) => ({ key: c.key, label: c.label }))}
             map={map}
