@@ -52,10 +52,11 @@ export async function createInvoice(
     return { ok: false, error: "Client name and email are required." };
   }
 
-  let client = await prisma.client.findFirst({ where: { site, email: clientEmail } });
-  if (!client) {
-    client = await prisma.client.create({ data: { name: clientName, email: clientEmail, site } });
-  }
+  const client = await prisma.client.upsert({
+    where: { email_site: { email: clientEmail, site } },
+    update: {},
+    create: { name: clientName, email: clientEmail, site },
+  });
 
   const invoice = await prisma.invoice.create({
     data: { clientId: client.id, site, status: "DRAFT", createdByUserId: me.id },
