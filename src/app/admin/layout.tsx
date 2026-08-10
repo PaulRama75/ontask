@@ -31,6 +31,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin" className="text-gray-600 hover:text-gray-900">
               Onboarding
             </Link>
+            {["PROJECT_MANAGER", "ACCOUNT_MANAGER", "ADMIN", "SUPER_ADMIN"].includes(user.role) && (
+              <Link href="/admin/invoices" className="text-gray-600 hover:text-gray-900">
+                Invoices
+              </Link>
+            )}
             {admin && (
               <>
                 <Link href="/admin/users" className="text-gray-600 hover:text-gray-900">

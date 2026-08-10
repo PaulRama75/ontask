@@ -1,4 +1,4 @@
-// Seeds the initial Super Admin user. Run: node scripts/seed.cjs
+// Seeds dev login accounts. Run: node scripts/seed.cjs
 const { PrismaClient } = require("@prisma/client");
 const { scryptSync, randomBytes } = require("crypto");
 
@@ -10,25 +10,35 @@ function hashPassword(password) {
   return `${salt}:${dk}`;
 }
 
-async function main() {
-  const email = process.env.SEED_ADMIN_EMAIL || "admin@fer.local";
-  const password = process.env.SEED_ADMIN_PASSWORD || "changeme123";
-
+async function ensureUser({ email, password, role, name }) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log(`Super Admin already exists: ${email}`);
+    console.log(`${role} already exists: ${email}`);
     return;
   }
+  await prisma.user.create({ data: { email, name, role, passwordHash: hashPassword(password) } });
+  console.log(`Created ${role}: ${email} / ${password}`);
+}
 
-  await prisma.user.create({
-    data: {
-      email,
-      name: "Super Admin",
-      role: "SUPER_ADMIN",
-      passwordHash: hashPassword(password),
-    },
+async function main() {
+  await ensureUser({
+    email: process.env.SEED_ADMIN_EMAIL || "admin@fer.local",
+    password: process.env.SEED_ADMIN_PASSWORD || "changeme123",
+    role: "SUPER_ADMIN",
+    name: "Super Admin",
   });
-  console.log(`Created Super Admin: ${email} / ${password}`);
+  await ensureUser({
+    email: process.env.SEED_PM_EMAIL || "pm@fer.local",
+    password: process.env.SEED_PM_PASSWORD || "pmpass123",
+    role: "PROJECT_MANAGER",
+    name: "Project Manager",
+  });
+  await ensureUser({
+    email: process.env.SEED_AM_EMAIL || "am@fer.local",
+    password: process.env.SEED_AM_PASSWORD || "ampass123",
+    role: "ACCOUNT_MANAGER",
+    name: "Account Manager",
+  });
 }
 
 main()
