@@ -85,7 +85,10 @@ export default async function InvoiceDetailPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{invoice.site}</h1>
             <p className="text-sm text-gray-500">
-              {invoice.client.name} · {invoice.client.email}
+              {invoice.client.name} ·{" "}
+              <a href={`mailto:${invoice.client.email}`} className="text-blue-600 hover:underline">
+                {invoice.client.email}
+              </a>
             </p>
           </div>
           <Link href="/admin/invoices" className="text-sm text-blue-600 hover:underline">
