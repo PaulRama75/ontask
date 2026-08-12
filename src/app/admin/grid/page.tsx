@@ -303,8 +303,12 @@ export default async function GridPage({
                       <td className={td}>
                         {editable("email") ? (
                           <EditableCell id={e.id} column="email" value={e.email} type="email" width="w-44" />
+                        ) : e.email ? (
+                          <a href={`mailto:${e.email}`} className="text-blue-600 hover:underline">
+                            {e.email}
+                          </a>
                         ) : (
-                          e.email || "—"
+                          "—"
                         )}
                       </td>
                     )}

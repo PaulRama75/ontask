@@ -101,7 +101,15 @@ export default async function AdminPage() {
                         {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{e.email ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {e.email ? (
+                        <a href={`mailto:${e.email}`} className="text-blue-600 hover:underline">
+                          {e.email}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={e.status} />
                     </td>
