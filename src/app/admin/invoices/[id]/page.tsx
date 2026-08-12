@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { STATUS_LABEL } from "../statusLabels";
+import AttachmentUploadForm from "../AttachmentUploadForm";
 import {
   addLineItem,
   deleteLineItem,
@@ -216,20 +217,7 @@ export default async function InvoiceDetailPage({
           </ul>
 
           {isDraftEditable && (
-            <form action={uploadInvoiceAttachment} className="mt-4 flex items-center gap-2">
-              <input type="hidden" name="invoiceId" value={invoice.id} />
-              <select name="category" className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-2 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400">
-                <option value="TIMESHEET">Timesheet</option>
-                <option value="OTHER">Other</option>
-              </select>
-              <input type="file" name="file" required className="text-sm text-slate-300" />
-              <button
-                type="submit"
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-              >
-                Upload
-              </button>
-            </form>
+            <AttachmentUploadForm invoiceId={invoice.id} action={uploadInvoiceAttachment} />
           )}
 
           {isDraftEditable && siteEmployees.length > 0 && (

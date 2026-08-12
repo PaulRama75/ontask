@@ -19,7 +19,24 @@ export default function UploadCell({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const labelRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const datalistId = `certnames-${id}`;
+
+  // Same underlying file input for both paths — toggle its accept/capture
+  // attributes right before opening it so "Take photo" jumps straight to the
+  // device camera on mobile, while "+ Attach" still opens the normal picker.
+  function openPicker(useCamera: boolean) {
+    const input = fileRef.current;
+    if (!input) return;
+    if (useCamera) {
+      input.accept = "image/*";
+      input.setAttribute("capture", "environment");
+    } else {
+      input.accept = "application/pdf,image/*";
+      input.removeAttribute("capture");
+    }
+    input.click();
+  }
 
   return (
     <form action={addEmployeeDocument} ref={formRef} className="mt-1 space-y-1">
@@ -43,16 +60,30 @@ export default function UploadCell({
           )}
         </>
       )}
-      <label className="cursor-pointer text-xs text-slate-400 hover:text-cyan-400 hover:underline">
-        + Attach
-        <input
-          type="file"
-          name="file"
-          accept="application/pdf,image/*"
-          className="hidden"
-          onChange={() => formRef.current?.requestSubmit()}
-        />
-      </label>
+      <input
+        ref={fileRef}
+        type="file"
+        name="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={() => formRef.current?.requestSubmit()}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => openPicker(false)}
+          className="text-xs text-slate-400 hover:text-cyan-400 hover:underline"
+        >
+          + Attach
+        </button>
+        <button
+          type="button"
+          onClick={() => openPicker(true)}
+          className="text-xs text-slate-400 hover:text-cyan-400 hover:underline"
+        >
+          📷 Photo
+        </button>
+      </div>
     </form>
   );
 }

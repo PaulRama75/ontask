@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { DOCUMENT_CATEGORIES, US_STATES } from "@/lib/constants";
 import { submitOnboarding } from "./actions";
 
@@ -42,9 +42,27 @@ export default function OnboardingForm({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   function updateCert(i: number, patch: Partial<CertRow>) {
     setCerts((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+
+  // Reconfigures a category's file input to open the device camera directly
+  // (mobile only — desktop just ignores capture and it's a normal picker).
+  function openCamera(key: string) {
+    const input = fileRefs.current[key];
+    if (!input) return;
+    input.accept = "image/*";
+    input.setAttribute("capture", "environment");
+    input.click();
+  }
+
+  function resetAccept(key: string) {
+    const input = fileRefs.current[key];
+    if (!input) return;
+    input.accept = "application/pdf,image/*";
+    input.removeAttribute("capture");
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -143,7 +161,26 @@ export default function OnboardingForm({
           {DOCUMENT_CATEGORIES.map((cat) => (
             <div key={cat.key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <label className="text-sm font-medium text-slate-300">{cat.label}</label>
-              <input type="file" name={`file_${cat.key}`} multiple accept="application/pdf,image/*" className="text-sm text-slate-400 file:mr-3 file:rounded-md file:border-0 file:bg-blue-500/15 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-blue-300 hover:file:bg-blue-500/25" />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={(el) => {
+                    fileRefs.current[cat.key] = el;
+                  }}
+                  type="file"
+                  name={`file_${cat.key}`}
+                  multiple
+                  accept="application/pdf,image/*"
+                  onChange={() => resetAccept(cat.key)}
+                  className="text-sm text-slate-400 file:mr-3 file:rounded-md file:border-0 file:bg-blue-500/15 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-blue-300 hover:file:bg-blue-500/25"
+                />
+                <button
+                  type="button"
+                  onClick={() => openCamera(cat.key)}
+                  className="whitespace-nowrap rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5"
+                >
+                  📷 Photo
+                </button>
+              </div>
             </div>
           ))}
         </div>
