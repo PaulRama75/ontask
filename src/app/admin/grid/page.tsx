@@ -24,7 +24,7 @@ import FrcCell from "./FrcCell";
 
 export const dynamic = "force-dynamic";
 
-type DocLite = { id: string; fileName: string; category: string };
+type DocLite = { id: string; fileName: string; category: string; label: string | null };
 
 function fmtDate(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "—";
@@ -40,23 +40,28 @@ function yesNo(v: boolean | null) {
   return v == null ? "—" : v ? "Yes" : "No";
 }
 
-// Renders attachment hyperlinks for a given document category.
+// Renders attachment hyperlinks for a given document category. Prefers the
+// document's title (Document.label, e.g. a certification name) as the link
+// text so the user can tell which file is which without opening it.
 function DocLinks({ docs, category }: { docs: DocLite[]; category: string }) {
   const items = docs.filter((d) => d.category === category);
   if (items.length === 0) return <span className="text-slate-600">—</span>;
   return (
     <div className="flex flex-col gap-0.5">
-      {items.map((d, i) => (
-        <a
-          key={d.id}
-          href={`/api/files/${d.id}`}
-          target="_blank"
-          className="text-cyan-400 hover:underline"
-          title={d.fileName}
-        >
-          {items.length > 1 ? `file ${i + 1}` : "view"}
-        </a>
-      ))}
+      {items.map((d, i) => {
+        const title = d.label?.trim();
+        return (
+          <a
+            key={d.id}
+            href={`/api/files/${d.id}`}
+            target="_blank"
+            className="text-cyan-400 hover:underline"
+            title={d.fileName}
+          >
+            {title || (items.length > 1 ? `file ${i + 1}` : "view")}
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -97,7 +102,7 @@ export default async function GridPage({
   const all = await prisma.employee.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      documents: { select: { id: true, fileName: true, category: true } },
+      documents: { select: { id: true, fileName: true, category: true, label: true } },
       certifications: { select: { name: true } },
     },
   });
@@ -384,7 +389,13 @@ export default async function GridPage({
                       <td className={td}>
                         <div className="text-xs text-slate-400">{certNames}</div>
                         <DocLinks docs={e.documents} category="CERTIFICATION" />
-                        {editable("certification") && <UploadCell id={e.id} column="certification" />}
+                        {editable("certification") && (
+                          <UploadCell
+                            id={e.id}
+                            column="certification"
+                            certNames={e.certifications.map((c) => c.name)}
+                          />
+                        )}
                       </td>
                     )}
                     {show("utilityBill") && (

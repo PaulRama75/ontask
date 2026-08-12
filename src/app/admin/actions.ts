@@ -211,11 +211,13 @@ export async function addEmployeeDocument(formData: FormData): Promise<void> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const saved = await saveFile(buffer, file.name, { employeeName, employeeId: id, category });
 
+  const title = String(formData.get("label") ?? "").trim();
+
   await prisma.document.create({
     data: {
       employeeId: id,
       category,
-      label: file.name,
+      label: title || file.name,
       fileName: file.name,
       storageKey: saved.storageKey,
       mimeType: file.type || "application/octet-stream",
