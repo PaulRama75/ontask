@@ -14,6 +14,9 @@ import {
   approveInvoice,
   rejectInvoice,
   approveAndSend,
+  archiveInvoice,
+  unarchiveInvoice,
+  replyToRejection,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +56,15 @@ export default async function InvoiceDetailPage({
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwner;
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
+  const isRejected = invoice.status === "DRAFT" && !!invoice.rejectionReason;
+
+  let rejector: { name: string | null; email: string } | null = null;
+  if (isRejected && invoice.rejectedByUserId) {
+    rejector = await prisma.user.findUnique({
+      where: { id: invoice.rejectedByUserId },
+      select: { name: true, email: true },
+    });
+  }
 
   let siteEmployees: { id: string; firstName: string | null; lastName: string | null }[] = [];
   if (isDraftEditable) {
@@ -84,11 +96,36 @@ export default async function InvoiceDetailPage({
         <span className="inline-block rounded-md bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700">
           {STATUS_LABEL[invoice.status] ?? invoice.status}
         </span>
+        {invoice.archived && (
+          <span className="ml-2 inline-block rounded-md bg-yellow-100 px-3 py-1 text-sm font-semibold text-yellow-800">
+            Archived
+          </span>
+        )}
 
-        {invoice.rejectionReason && invoice.status === "DRAFT" && (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            <strong>Rejected:</strong> {invoice.rejectionReason}
-          </p>
+        {isRejected && (
+          <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <p>
+              <strong>Rejected{rejector ? ` by ${rejector.name || rejector.email}` : ""}:</strong>{" "}
+              {invoice.rejectionReason}
+            </p>
+            {isOwner && rejector && (
+              <form action={replyToRejection} className="mt-3 flex items-center gap-2">
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <input
+                  name="message"
+                  placeholder={`Reply to ${rejector.name || rejector.email}…`}
+                  required
+                  className="flex-1 rounded-md border border-red-200 bg-white px-3 py-2 text-sm text-gray-800"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                >
+                  Send reply
+                </button>
+              </form>
+            )}
+          </div>
         )}
 
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -274,6 +311,18 @@ export default async function InvoiceDetailPage({
                   className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
                 >
                   Reject
+                </button>
+              </form>
+            )}
+
+            {isOwner && (
+              <form action={invoice.archived ? unarchiveInvoice : archiveInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  {invoice.archived ? "Unarchive" : "Archive"}
                 </button>
               </form>
             )}

@@ -8,10 +8,14 @@ type StatusOption = { value: string; label: string };
 export default function InvoiceControls({
   total,
   shown,
+  showArchived,
+  archivedCount,
   statusOptions,
 }: {
   total: number;
   shown: number;
+  showArchived: boolean;
+  archivedCount: number;
   statusOptions: StatusOption[];
 }) {
   const router = useRouter();
@@ -42,6 +46,14 @@ export default function InvoiceControls({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, status]);
 
+  function toggleArchived() {
+    const sp = new URLSearchParams(params.toString());
+    if (showArchived) sp.delete("archived");
+    else sp.set("archived", "1");
+    const qs = sp.toString();
+    startTransition(() => router.replace(qs ? `/admin/invoices?${qs}` : "/admin/invoices"));
+  }
+
   function clear() {
     setQ("");
     setStatus("all");
@@ -68,6 +80,16 @@ export default function InvoiceControls({
           </option>
         ))}
       </select>
+
+      <label className="flex items-center gap-1.5 text-sm text-gray-600">
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={toggleArchived}
+          className="h-4 w-4 rounded border-gray-300"
+        />
+        Show archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
+      </label>
 
       {(q || status !== "all") && (
         <button

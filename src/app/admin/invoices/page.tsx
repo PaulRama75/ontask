@@ -18,7 +18,7 @@ function isSortKey(v: string): v is SortKey {
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; sort?: string; dir?: string; archived?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
@@ -26,9 +26,16 @@ export default async function InvoicesPage({
   const nav = await getNavAccess(me.role);
   if (!nav.invoices) redirect(firstAllowedNavHref(nav));
 
-  const { q = "", status = "all", sort: sortParam, dir: dirParam } = await searchParams;
+  const {
+    q = "",
+    status = "all",
+    sort: sortParam,
+    dir: dirParam,
+    archived: archivedParam,
+  } = await searchParams;
   const sort: SortKey = sortParam && isSortKey(sortParam) ? sortParam : "createdAt";
   const dir: "asc" | "desc" = dirParam === "asc" ? "asc" : "desc";
+  const showArchived = archivedParam === "1";
 
   const where =
     me.role === "PROJECT_MANAGER"
@@ -49,6 +56,7 @@ export default async function InvoicesPage({
 
   const needle = q.trim().toLowerCase();
   const filtered = withTotals.filter((inv) => {
+    if (inv.archived !== showArchived) return false;
     if (status !== "all" && inv.status !== status) return false;
     if (needle) {
       const haystack = `${inv.site} ${inv.client.name}`.toLowerCase();
@@ -126,8 +134,10 @@ export default async function InvoicesPage({
         </div>
 
         <InvoiceControls
-          total={all.length}
+          total={withTotals.filter((inv) => inv.archived === showArchived).length}
           shown={invoices.length}
+          showArchived={showArchived}
+          archivedCount={withTotals.filter((inv) => inv.archived).length}
           statusOptions={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
         />
 
@@ -165,6 +175,11 @@ export default async function InvoicesPage({
                       <span className={`rounded-md px-2 py-1 text-xs font-semibold ${STATUS_STYLE[inv.status]}`}>
                         {STATUS_LABEL[inv.status] ?? inv.status}
                       </span>
+                      {inv.archived && (
+                        <span className="ml-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">
+                          Archived
+                        </span>
+                      )}
                     </td>
                     <td className={`${td} whitespace-nowrap`}>{inv.createdAt.toISOString().slice(0, 10)}</td>
                   </tr>

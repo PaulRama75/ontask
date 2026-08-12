@@ -194,6 +194,8 @@ model Invoice {
   status          String    @default("DRAFT")
   createdByUserId String
   rejectionReason String?
+  rejectedByUserId String?
+  archived        Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sentAt          DateTime?

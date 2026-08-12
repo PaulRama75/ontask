@@ -26,6 +26,12 @@ async function requireAdminUser() {
   return me;
 }
 
+// Same ownership rule used throughout this file: the PM who created the
+// invoice, or any admin (admins can manage every invoice, not just their own).
+function isInvoiceOwner(me: { id: string; role: string }, invoice: { createdByUserId: string }) {
+  return isAdminRole(me.role) || (me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id);
+}
+
 // Escapes user-controlled text before interpolating into notification/invoice HTML emails.
 function escapeHtml(text: string): string {
   return text
@@ -346,7 +352,10 @@ export async function rejectInvoice(form: FormData): Promise<void> {
     throw new Error("Not authorized to reject this invoice at its current status.");
   }
 
-  await prisma.invoice.update({ where: { id }, data: { status: "DRAFT", rejectionReason: reason } });
+  await prisma.invoice.update({
+    where: { id },
+    data: { status: "DRAFT", rejectionReason: reason, rejectedByUserId: me.id },
+  });
 
   const creator = await prisma.user.findUnique({ where: { id: invoice.createdByUserId } });
   if (creator) {
@@ -414,5 +423,59 @@ ${rows}
 
   if (!sent) {
     throw new Error("Email to the client failed to send. The invoice is approved — click Send again to retry.");
+  }
+}
+
+export async function archiveInvoice(form: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+
+  await prisma.invoice.update({ where: { id }, data: { archived: true } });
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
+export async function unarchiveInvoice(form: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+
+  await prisma.invoice.update({ where: { id }, data: { archived: false } });
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
+// Lets the invoice owner send a one-off email reply to whoever rejected it
+// (the "last person" who acted on it) — a quick "fixed, see updated
+// timesheet" note rather than a full comment thread.
+export async function replyToRejection(form: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
+  const id = String(form.get("invoiceId") ?? "");
+  const message = String(form.get("message") ?? "").trim();
+  if (!message) throw new Error("A reply message is required.");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+  if (invoice.status !== "DRAFT" || !invoice.rejectionReason || !invoice.rejectedByUserId) {
+    throw new Error("This invoice hasn't been rejected.");
+  }
+
+  const rejector = await prisma.user.findUnique({ where: { id: invoice.rejectedByUserId } });
+  if (rejector) {
+    const from = me.name || me.email;
+    await sendEmail({
+      to: rejector.email,
+      subject: `Reply — invoice for ${invoice.site}`,
+      html: `<p>${escapeHtml(from)} replied about the invoice for ${escapeHtml(invoice.site)} you rejected:</p><p>${escapeHtml(message)}</p>`,
+    });
   }
 }
