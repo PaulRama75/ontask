@@ -41,14 +41,14 @@ export default function GridControls({ total, shown }: { total: number; shown: n
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search name, email, phone, SS#, address…"
-          className="w-72 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="w-72 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 shadow-sm focus:border-cyan-400 focus:ring-cyan-400"
         />
       </div>
 
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}
-        className="rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500"
+        className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white shadow-sm focus:border-cyan-400"
       >
         <option value="all">All statuses</option>
         <option value="approved">Approved</option>
@@ -61,13 +61,13 @@ export default function GridControls({ total, shown }: { total: number; shown: n
       {(q || status !== "all") && (
         <button
           onClick={clear}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          className="rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
         >
           Clear
         </button>
       )}
 
-      <span className="ml-auto text-sm text-gray-500">
+      <span className="ml-auto text-sm text-slate-400">
         {shown} of {total} employees
       </span>
     </div>

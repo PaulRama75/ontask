@@ -70,10 +70,10 @@ export default function AccessMatrix({
   return (
     <form
       onSubmit={onSubmit}
-      className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+      className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur"
     >
       <table className="w-full text-left text-sm">
-        <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+        <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
           <tr>
             <th className="px-4 py-3">Column</th>
             <th className="px-4 py-3">Access</th>
@@ -84,13 +84,13 @@ export default function AccessMatrix({
           {columns.map((c) => {
             const row = rows[c.key];
             return (
-              <tr key={c.key} className="border-b border-gray-100 last:border-0">
-                <td className="px-4 py-3 font-medium text-gray-900">{c.label}</td>
+              <tr key={c.key} className="border-b border-white/10 last:border-0">
+                <td className="px-4 py-3 font-medium text-white">{c.label}</td>
                 <td className="px-4 py-3">
                   <select
                     value={row.level}
                     onChange={(e) => setLevel(c.key, e.target.value as Level)}
-                    className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                    className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
                   >
                     {LEVELS.map((l) => (
                       <option key={l} value={l}>
@@ -105,7 +105,7 @@ export default function AccessMatrix({
                     checked={row.canApprove}
                     disabled={row.level !== "EDIT"}
                     onChange={(e) => setApprove(c.key, e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 disabled:opacity-40"
+                    className="h-4 w-4 rounded border-white/10 bg-slate-800 disabled:opacity-40"
                   />
                 </td>
               </tr>
@@ -113,16 +113,16 @@ export default function AccessMatrix({
           })}
         </tbody>
       </table>
-      <div className="flex items-center gap-3 border-t border-gray-200 px-4 py-3">
+      <div className="flex items-center gap-3 border-t border-white/10 px-4 py-3">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save changes"}
         </button>
-        {saved && <span className="text-sm text-green-600">Saved.</span>}
-        {error && <span className="text-sm text-red-600">{error}</span>}
+        {saved && <span className="text-sm text-emerald-400">Saved.</span>}
+        {error && <span className="text-sm text-rose-400">{error}</span>}
       </div>
     </form>
   );

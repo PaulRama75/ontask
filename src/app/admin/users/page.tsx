@@ -16,16 +16,16 @@ export default async function UsersPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-      <p className="mt-1 text-sm text-gray-500">
+      <h1 className="text-2xl font-bold text-white">Users</h1>
+      <p className="mt-1 text-sm text-slate-400">
         Create staff accounts and assign roles. Roles drive column access.
       </p>
 
       <NewUserForm action={createUser} />
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <section className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+          <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
@@ -35,9 +35,9 @@ export default async function UsersPage() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-b border-gray-100 last:border-0">
-                <td className="px-4 py-3 font-medium text-gray-900">{u.name || "—"}</td>
-                <td className="px-4 py-3 text-gray-600">{u.email}</td>
+              <tr key={u.id} className="border-b border-white/10 last:border-0">
+                <td className="px-4 py-3 font-medium text-white">{u.name || "—"}</td>
+                <td className="px-4 py-3 text-slate-400">{u.email}</td>
                 <td className="px-4 py-3">
                   <form action={setUserRole} className="flex items-center gap-2">
                     <input type="hidden" name="userId" value={u.id} />
@@ -45,7 +45,7 @@ export default async function UsersPage() {
                       name="role"
                       defaultValue={u.role}
                       disabled={u.id === me.id}
-                      className="rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                      className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400 disabled:bg-slate-900/40 disabled:text-slate-500"
                     >
                       {ROLES.map((r) => (
                         <option key={r} value={r}>
@@ -54,7 +54,7 @@ export default async function UsersPage() {
                       ))}
                     </select>
                     {u.id !== me.id && (
-                      <button className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                      <button className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5">
                         Save
                       </button>
                     )}
@@ -62,7 +62,7 @@ export default async function UsersPage() {
                 </td>
                 <td className="px-4 py-3">
                   {u.id === me.id ? (
-                    <span className="text-xs text-gray-400">you</span>
+                    <span className="text-xs text-slate-500">you</span>
                   ) : (
                     <form action={setUserActive}>
                       <input type="hidden" name="userId" value={u.id} />
@@ -70,8 +70,8 @@ export default async function UsersPage() {
                       <button
                         className={
                           u.active
-                            ? "rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
-                            : "rounded-md bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-300"
+                            ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                            : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
                         }
                       >
                         {u.active ? "Active" : "Disabled"}

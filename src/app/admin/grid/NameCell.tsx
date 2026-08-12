@@ -32,7 +32,7 @@ export default function NameCell({
               e.currentTarget.blur();
             }
           }}
-          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none"
+          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
         />
         <input
           name="lastName"
@@ -45,11 +45,11 @@ export default function NameCell({
               e.currentTarget.blur();
             }
           }}
-          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none"
+          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
         />
       </form>
       {canOpenLibrary && (
-        <Link href={`/admin/employee/${id}`} className="text-xs text-blue-600 hover:underline">
+        <Link href={`/admin/employee/${id}`} className="text-xs text-cyan-400 hover:underline">
           Open details →
         </Link>
       )}

@@ -75,38 +75,38 @@ export default async function InvoiceDetailPage({
     });
   }
 
-  const th = "px-2 py-1 text-left text-xs font-semibold uppercase text-gray-500";
-  const td = "px-2 py-1.5 text-gray-800";
+  const th = "px-2 py-1 text-left text-xs font-semibold uppercase text-slate-400";
+  const td = "px-2 py-1.5 text-slate-200";
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
+    <main className="min-h-screen bg-slate-950 py-8">
       <div className="mx-auto max-w-3xl px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{invoice.site}</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-white">{invoice.site}</h1>
+            <p className="text-sm text-slate-400">
               {invoice.client.name} ·{" "}
-              <a href={`mailto:${invoice.client.email}`} className="text-blue-600 hover:underline">
+              <a href={`mailto:${invoice.client.email}`} className="text-cyan-400 hover:underline">
                 {invoice.client.email}
               </a>
             </p>
           </div>
-          <Link href="/admin/invoices" className="text-sm text-blue-600 hover:underline">
+          <Link href="/admin/invoices" className="text-sm text-cyan-400 hover:underline">
             ← All invoices
           </Link>
         </div>
 
-        <span className="inline-block rounded-md bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700">
+        <span className="inline-block rounded-md bg-white/5 px-3 py-1 text-sm font-semibold text-slate-300">
           {STATUS_LABEL[invoice.status] ?? invoice.status}
         </span>
         {invoice.archived && (
-          <span className="ml-2 inline-block rounded-md bg-yellow-100 px-3 py-1 text-sm font-semibold text-yellow-800">
+          <span className="ml-2 inline-block rounded-md bg-amber-500/15 px-3 py-1 text-sm font-semibold text-amber-300">
             Archived
           </span>
         )}
 
         {isRejected && (
-          <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">
             <p>
               <strong>Rejected{rejector ? ` by ${rejector.name || rejector.email}` : ""}:</strong>{" "}
               {invoice.rejectionReason}
@@ -118,11 +118,11 @@ export default async function InvoiceDetailPage({
                   name="message"
                   placeholder={`Reply to ${rejector.name || rejector.email}…`}
                   required
-                  className="flex-1 rounded-md border border-red-200 bg-white px-3 py-2 text-sm text-gray-800"
+                  className="flex-1 rounded-md border border-rose-500/30 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500"
                 />
                 <button
                   type="submit"
-                  className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                  className="rounded-md border border-rose-500/40 bg-slate-800/60 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
                 >
                   Send reply
                 </button>
@@ -131,8 +131,8 @@ export default async function InvoiceDetailPage({
           </div>
         )}
 
-        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Line items</h2>
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-lg font-semibold text-white">Line items</h2>
           <table className="mt-3 w-full text-sm">
             <thead>
               <tr>
@@ -143,20 +143,20 @@ export default async function InvoiceDetailPage({
             </thead>
             <tbody>
               {invoice.lineItems.map((li) => (
-                <tr key={li.id} className="border-t border-gray-100">
+                <tr key={li.id} className="border-t border-white/10">
                   <td className={td}>{li.description}</td>
                   <td className={td}>${li.amount.toFixed(2)}</td>
                   {isDraftEditable && (
                     <td className={td}>
                       <form action={deleteLineItem}>
                         <input type="hidden" name="lineItemId" value={li.id} />
-                        <button className="text-xs text-red-600 hover:underline">Remove</button>
+                        <button className="text-xs text-rose-300 hover:underline">Remove</button>
                       </form>
                     </td>
                   )}
                 </tr>
               ))}
-              <tr className="border-t border-gray-200 font-semibold">
+              <tr className="border-t border-white/10 font-semibold">
                 <td className={td}>Total</td>
                 <td className={td}>${total.toFixed(2)}</td>
                 {isDraftEditable && <td className={td}></td>}
@@ -171,7 +171,7 @@ export default async function InvoiceDetailPage({
                 name="description"
                 placeholder="Description"
                 required
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="flex-1 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
               />
               <input
                 name="amount"
@@ -180,11 +180,11 @@ export default async function InvoiceDetailPage({
                 min="0.01"
                 placeholder="Amount"
                 required
-                className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-32 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
               />
               <button
                 type="submit"
-                className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-900"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
               >
                 Add
               </button>
@@ -192,23 +192,23 @@ export default async function InvoiceDetailPage({
           )}
         </section>
 
-        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Attachments</h2>
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-lg font-semibold text-white">Attachments</h2>
           <ul className="mt-3 space-y-1 text-sm">
-            {invoice.attachments.length === 0 && <li className="text-gray-400">No attachments yet.</li>}
+            {invoice.attachments.length === 0 && <li className="text-slate-500">No attachments yet.</li>}
             {invoice.attachments.map((att) => (
               <li key={att.id} className="flex items-center justify-between">
                 <a
                   href={`/api/invoice-files/${att.id}`}
                   target="_blank"
-                  className="text-blue-600 hover:underline"
+                  className="text-cyan-400 hover:underline"
                 >
-                  {att.fileName} <span className="text-xs text-gray-400">({att.category})</span>
+                  {att.fileName} <span className="text-xs text-slate-500">({att.category})</span>
                 </a>
                 {isDraftEditable && (
                   <form action={deleteInvoiceAttachment}>
                     <input type="hidden" name="attachmentId" value={att.id} />
-                    <button className="text-xs text-red-600 hover:underline">Remove</button>
+                    <button className="text-xs text-rose-300 hover:underline">Remove</button>
                   </form>
                 )}
               </li>
@@ -218,14 +218,14 @@ export default async function InvoiceDetailPage({
           {isDraftEditable && (
             <form action={uploadInvoiceAttachment} className="mt-4 flex items-center gap-2">
               <input type="hidden" name="invoiceId" value={invoice.id} />
-              <select name="category" className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+              <select name="category" className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-2 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400">
                 <option value="TIMESHEET">Timesheet</option>
                 <option value="OTHER">Other</option>
               </select>
-              <input type="file" name="file" required className="text-sm" />
+              <input type="file" name="file" required className="text-sm text-slate-300" />
               <button
                 type="submit"
-                className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-900"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
               >
                 Upload
               </button>
@@ -233,20 +233,26 @@ export default async function InvoiceDetailPage({
           )}
 
           {isDraftEditable && siteEmployees.length > 0 && (
-            <form action={attachGridExport} className="mt-6 border-t border-gray-100 pt-4">
+            <form action={attachGridExport} className="mt-6 border-t border-white/10 pt-4">
               <input type="hidden" name="invoiceId" value={invoice.id} />
-              <p className="text-sm font-medium text-gray-700">Attach a grid snapshot for {invoice.site}</p>
-              <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
+              <p className="text-sm font-medium text-slate-300">Attach a grid snapshot for {invoice.site}</p>
+              <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-md border border-white/10 p-2">
                 {siteEmployees.map((e) => (
-                  <label key={e.id} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="employeeIds" value={e.id} defaultChecked />
+                  <label key={e.id} className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      name="employeeIds"
+                      value={e.id}
+                      defaultChecked
+                      className="border-white/10 bg-slate-800"
+                    />
                     {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
                   </label>
                 ))}
               </div>
               <button
                 type="submit"
-                className="mt-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="mt-2 rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
               >
                 Attach grid snapshot
               </button>
@@ -254,15 +260,15 @@ export default async function InvoiceDetailPage({
           )}
         </section>
 
-        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Actions</h2>
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-lg font-semibold text-white">Actions</h2>
           <div className="mt-3 flex flex-wrap gap-3">
             {isDraftEditable && invoice.lineItems.length > 0 && (
               <form action={submitInvoice}>
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
                   type="submit"
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
                 >
                   Submit for review
                 </button>
@@ -270,7 +276,7 @@ export default async function InvoiceDetailPage({
             )}
 
             {isDraftEditable && invoice.lineItems.length === 0 && (
-              <p className="self-center text-sm text-gray-400">
+              <p className="self-center text-sm text-slate-500">
                 Add at least one line item before you can submit.
               </p>
             )}
@@ -280,7 +286,7 @@ export default async function InvoiceDetailPage({
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
                   type="submit"
-                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
                 >
                   Approve
                 </button>
@@ -292,7 +298,7 @@ export default async function InvoiceDetailPage({
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
                   type="submit"
-                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
                 >
                   {invoice.status === "ADMIN_APPROVED" ? "Retry send to client" : "Approve & send to client"}
                 </button>
@@ -307,11 +313,11 @@ export default async function InvoiceDetailPage({
                   name="reason"
                   placeholder="Rejection reason"
                   required
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
                 />
                 <button
                   type="submit"
-                  className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                  className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
                 >
                   Reject
                 </button>
@@ -323,7 +329,7 @@ export default async function InvoiceDetailPage({
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
                   type="submit"
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
                 >
                   {invoice.archived ? "Unarchive" : "Archive"}
                 </button>

@@ -19,7 +19,7 @@ export default function FrcCell({
         name="needed"
         defaultValue={needed === true ? "true" : needed === false ? "false" : ""}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none"
+        className="rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
       >
         <option value="">—</option>
         <option value="true">Yes</option>
@@ -36,7 +36,7 @@ export default function FrcCell({
             e.currentTarget.blur();
           }
         }}
-        className="w-16 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none"
+        className="w-16 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
       />
     </form>
   );

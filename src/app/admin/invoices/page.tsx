@@ -83,8 +83,8 @@ export default async function InvoicesPage({
   });
 
   const th =
-    "border border-gray-300 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600";
-  const td = "border border-gray-300 px-3 py-2 align-top text-gray-800";
+    "border border-white/10 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300";
+  const td = "border border-white/10 px-3 py-2 align-top text-slate-200";
 
   // Builds an href that toggles sort direction on this column while
   // preserving the current search/status filters.
@@ -101,9 +101,9 @@ export default async function InvoicesPage({
     const active = sort === sortKey;
     return (
       <th className={th}>
-        <Link href={sortHref(sortKey)} className="flex items-center gap-1 hover:text-gray-900">
+        <Link href={sortHref(sortKey)} className="flex items-center gap-1 hover:text-white">
           {label}
-          <span className={active ? "text-gray-700" : "text-gray-300"}>
+          <span className={active ? "text-slate-300" : "text-slate-600"}>
             {active ? (dir === "asc" ? "▲" : "▼") : "▲"}
           </span>
         </Link>
@@ -112,12 +112,12 @@ export default async function InvoicesPage({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
+    <main className="min-h-screen bg-slate-950 py-8">
       <div className="mx-auto max-w-5xl px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-white">Invoices</h1>
+            <p className="text-sm text-slate-400">
               {me.role === "PROJECT_MANAGER"
                 ? "Invoices you've created."
                 : "Invoices awaiting or past your review."}
@@ -126,7 +126,7 @@ export default async function InvoicesPage({
           {(me.role === "PROJECT_MANAGER" || isAdminRole(me.role)) && (
             <Link
               href="/admin/invoices/new"
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
             >
               + New invoice
             </Link>
@@ -141,9 +141,9 @@ export default async function InvoicesPage({
           statusOptions={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
         />
 
-        <div className="overflow-x-auto rounded-lg border border-gray-300 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full border-collapse text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-slate-900/80">
               <tr>
                 <SortHeader sortKey="site" label="Site" />
                 <SortHeader sortKey="client" label="Client" />
@@ -155,7 +155,7 @@ export default async function InvoicesPage({
             <tbody>
               {invoices.length === 0 && (
                 <tr>
-                  <td className={`${td} text-center text-gray-400`} colSpan={5}>
+                  <td className={`${td} text-center text-slate-500`} colSpan={5}>
                     {all.length === 0 ? "No invoices yet." : "No invoices match your search/filter."}
                   </td>
                 </tr>
@@ -165,7 +165,7 @@ export default async function InvoicesPage({
                 return (
                   <tr key={inv.id}>
                     <td className={td}>
-                      <Link href={`/admin/invoices/${inv.id}`} className="text-blue-600 hover:underline">
+                      <Link href={`/admin/invoices/${inv.id}`} className="text-cyan-400 hover:underline">
                         {inv.site}
                       </Link>
                     </td>
@@ -176,7 +176,7 @@ export default async function InvoicesPage({
                         {STATUS_LABEL[inv.status] ?? inv.status}
                       </span>
                       {inv.archived && (
-                        <span className="ml-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">
+                        <span className="ml-1 rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300">
                           Archived
                         </span>
                       )}

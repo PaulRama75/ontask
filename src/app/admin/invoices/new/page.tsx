@@ -13,9 +13,9 @@ export default async function NewInvoicePage() {
   if (me.role !== "PROJECT_MANAGER" && !isAdminRole(me.role)) redirect("/admin/invoices");
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
+    <main className="min-h-screen bg-slate-950 py-8">
       <div className="mx-auto max-w-lg px-4">
-        <h1 className="text-2xl font-bold text-gray-900">New invoice</h1>
+        <h1 className="text-2xl font-bold text-white">New invoice</h1>
         <NewInvoiceForm />
       </div>
     </main>

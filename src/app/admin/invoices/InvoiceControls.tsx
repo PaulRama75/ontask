@@ -65,13 +65,13 @@ export default function InvoiceControls({
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search site or client…"
-        className="w-64 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        className="w-64 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 shadow-sm focus:border-cyan-400 focus:ring-cyan-400"
       />
 
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}
-        className="rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500"
+        className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white shadow-sm focus:border-cyan-400"
       >
         <option value="all">All statuses</option>
         {statusOptions.map((opt) => (
@@ -81,12 +81,12 @@ export default function InvoiceControls({
         ))}
       </select>
 
-      <label className="flex items-center gap-1.5 text-sm text-gray-600">
+      <label className="flex items-center gap-1.5 text-sm text-slate-400">
         <input
           type="checkbox"
           checked={showArchived}
           onChange={toggleArchived}
-          className="h-4 w-4 rounded border-gray-300"
+          className="h-4 w-4 rounded border-white/10 bg-slate-800"
         />
         Show archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
       </label>
@@ -94,13 +94,13 @@ export default function InvoiceControls({
       {(q || status !== "all") && (
         <button
           onClick={clear}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          className="rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
         >
           Clear
         </button>
       )}
 
-      <span className="ml-auto text-sm text-gray-500">
+      <span className="ml-auto text-sm text-slate-400">
         {shown} of {total} invoices
       </span>
     </div>

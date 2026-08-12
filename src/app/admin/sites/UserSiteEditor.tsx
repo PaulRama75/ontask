@@ -55,8 +55,8 @@ export default function UserSiteEditor({
               key={site}
               className={
                 on
-                  ? "cursor-pointer rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700"
-                  : "cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  ? "cursor-pointer rounded-md border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-300"
+                  : "cursor-pointer rounded-md border border-white/10 bg-slate-900/60 px-2 py-1 text-xs text-slate-300 hover:bg-white/5"
               }
             >
               <input
@@ -74,17 +74,17 @@ export default function UserSiteEditor({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save"}
         </button>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-slate-400">
           {restricted
             ? `Restricted to ${selected.size} site${selected.size === 1 ? "" : "s"}`
             : "Unrestricted (all sites)"}
         </span>
-        {saved && <span className="text-xs text-green-600">Saved.</span>}
-        {error && <span className="text-xs text-red-600">{error}</span>}
+        {saved && <span className="text-xs text-emerald-400">Saved.</span>}
+        {error && <span className="text-xs text-rose-400">{error}</span>}
       </div>
     </form>
   );

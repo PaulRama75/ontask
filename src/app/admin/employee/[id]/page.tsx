@@ -61,20 +61,20 @@ export default async function EmployeeLibraryPage({
   const docsByCategory = (cat: string) => e.documents.filter((d) => d.category === cat);
 
   return (
-    <main className="min-h-screen bg-gray-50 py-10">
+    <main className="min-h-screen bg-slate-950 py-10">
       <div className="mx-auto max-w-4xl px-4">
-        <Link href="/admin" className="text-sm text-blue-600 hover:underline">
+        <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
           ← Back to admin
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">{name}</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="mt-2 text-2xl font-bold text-white">{name}</h1>
+        <p className="text-sm text-slate-400">
           {canLib ? "Document library" : "Project Lead details"} · status {e.status}
         </p>
 
         {(canLib || canEditPL) && (
-          <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Project Lead Details</h2>
-            <p className="mt-1 text-xs text-gray-500">
+          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Project Lead Details</h2>
+            <p className="mt-1 text-xs text-slate-400">
               Filled in by the Project Lead after the employee completes onboarding.
             </p>
             <form action={saveProjectLeadDetails} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -175,7 +175,7 @@ export default async function EmployeeLibraryPage({
 
               {canEditPL && (
                 <div className="sm:col-span-2">
-                  <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                  <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
                     Save details
                   </button>
                 </div>
@@ -185,8 +185,8 @@ export default async function EmployeeLibraryPage({
         )}
 
         {canLib && (
-        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Details</h2>
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-lg font-semibold text-white">Details</h2>
           <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <Detail label="Email" value={e.email} />
             <Detail label="Phone" value={e.phone} />
@@ -201,24 +201,24 @@ export default async function EmployeeLibraryPage({
 
         {canLib && (
         <>
-        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-lg font-semibold text-white">Documents</h2>
           <div className="mt-3 space-y-4">
             {DOCUMENT_CATEGORIES.map((cat) => {
               const docs = docsByCategory(cat.key);
               return (
                 <div key={cat.key}>
-                  <h3 className="text-sm font-semibold text-gray-700">{cat.label}</h3>
+                  <h3 className="text-sm font-semibold text-slate-300">{cat.label}</h3>
                   {docs.length === 0 ? (
-                    <p className="text-sm text-gray-400">No files</p>
+                    <p className="text-sm text-slate-500">No files</p>
                   ) : (
                     <ul className="mt-1 space-y-1">
                       {docs.map((d) => (
                         <li key={d.id}>
-                          <a href={`/api/files/${d.id}`} target="_blank" className="text-sm text-blue-600 hover:underline">
+                          <a href={`/api/files/${d.id}`} target="_blank" className="text-sm text-cyan-400 hover:underline">
                             {d.fileName}
                           </a>
-                          <span className="ml-2 text-xs text-gray-400">
+                          <span className="ml-2 text-xs text-slate-500">
                             {(d.size / 1024).toFixed(0)} KB
                           </span>
                         </li>
@@ -232,9 +232,9 @@ export default async function EmployeeLibraryPage({
         </section>
 
         {e.certifications.length > 0 && (
-          <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Certifications</h2>
-            <ul className="mt-3 space-y-1 text-sm text-gray-700">
+          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Certifications</h2>
+            <ul className="mt-3 space-y-1 text-sm text-slate-300">
               {e.certifications.map((c) => (
                 <li key={c.id}>
                   {c.name}
@@ -255,13 +255,13 @@ export default async function EmployeeLibraryPage({
 function Detail({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-gray-400">{label}</dt>
-      <dd className="text-gray-900">{value || "—"}</dd>
+      <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+      <dd className="text-white">{value || "—"}</dd>
     </div>
   );
 }
 
-const inputCls = "rounded-md border border-gray-300 px-3 py-2 text-sm w-full";
+const inputCls = "rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400 w-full";
 
 function fmtDate(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "—";
@@ -278,12 +278,12 @@ function yesNoText(v: boolean | null) {
 function PLField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
   );
 }
 
 function ReadOnly({ value }: { value?: string | null }) {
-  return <div className="text-gray-900">{value || "—"}</div>;
+  return <div className="text-white">{value || "—"}</div>;
 }

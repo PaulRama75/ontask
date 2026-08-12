@@ -43,7 +43,7 @@ function yesNo(v: boolean | null) {
 // Renders attachment hyperlinks for a given document category.
 function DocLinks({ docs, category }: { docs: DocLite[]; category: string }) {
   const items = docs.filter((d) => d.category === category);
-  if (items.length === 0) return <span className="text-gray-300">—</span>;
+  if (items.length === 0) return <span className="text-slate-600">—</span>;
   return (
     <div className="flex flex-col gap-0.5">
       {items.map((d, i) => (
@@ -51,7 +51,7 @@ function DocLinks({ docs, category }: { docs: DocLite[]; category: string }) {
           key={d.id}
           href={`/api/files/${d.id}`}
           target="_blank"
-          className="text-blue-600 hover:underline"
+          className="text-cyan-400 hover:underline"
           title={d.fileName}
         >
           {items.length > 1 ? `file ${i + 1}` : "view"}
@@ -162,29 +162,29 @@ export default async function GridPage({
     gridCols.filter(show).length + (show("payRate") ? 1 : 0) + (show("billRate") ? 1 : 0);
 
   const th =
-    "border border-gray-300 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 whitespace-nowrap";
-  const td = "border border-gray-300 px-2 py-1.5 align-top text-gray-800";
+    "border border-white/10 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 whitespace-nowrap";
+  const td = "border border-white/10 px-2 py-1.5 align-top text-slate-200";
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
+    <main className="min-h-screen bg-slate-950 py-8">
       <div className="mx-auto max-w-[1400px] px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Employee Data Grid</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-white">Employee Data Grid</h1>
+            <p className="text-sm text-slate-400">
               All employees with document attachments and approval status.
             </p>
           </div>
-          <Link href="/admin" className="text-sm text-blue-600 hover:underline">
+          <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
             ← Admin home
           </Link>
         </div>
 
         <GridControls total={all.length} shown={employees.length} />
 
-        <div className="overflow-x-auto rounded-lg border border-gray-300 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full border-collapse text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-slate-900/80">
               <tr>
                 {show("name") && <th className={th}>Employee</th>}
                 {show("site") && <th className={th}>Site</th>}
@@ -210,7 +210,7 @@ export default async function GridPage({
             <tbody>
               {employees.length === 0 && (
                 <tr>
-                  <td className={`${td} text-center text-gray-400`} colSpan={visibleCount || 1}>
+                  <td className={`${td} text-center text-slate-500`} colSpan={visibleCount || 1}>
                     {all.length === 0 ? "No employees yet." : "No employees match your search/filter."}
                   </td>
                 </tr>
@@ -222,7 +222,7 @@ export default async function GridPage({
                   .join(", ");
                 const certNames = e.certifications.map((c) => c.name).join(", ");
                 return (
-                  <tr key={e.id} className={e.approved ? "bg-green-50" : ""}>
+                  <tr key={e.id} className={e.approved ? "bg-emerald-500/10" : ""}>
                     {show("name") && (
                       <td className={`${td} whitespace-nowrap font-medium`}>
                         {editable("name") ? (
@@ -233,7 +233,7 @@ export default async function GridPage({
                             canOpenLibrary={canOpenDetails}
                           />
                         ) : canOpenDetails ? (
-                          <Link href={`/admin/employee/${e.id}`} className="text-blue-600 hover:underline">
+                          <Link href={`/admin/employee/${e.id}`} className="text-cyan-400 hover:underline">
                             {name}
                           </Link>
                         ) : (
@@ -260,8 +260,8 @@ export default async function GridPage({
                               type="submit"
                               className={
                                 e.active
-                                  ? "rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
-                                  : "rounded-md bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-300"
+                                  ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                                  : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
                               }
                               title="Click to toggle"
                             >
@@ -272,8 +272,8 @@ export default async function GridPage({
                           <span
                             className={
                               e.active
-                                ? "rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700"
-                                : "rounded-md bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600"
+                                ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300"
+                                : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300"
                             }
                           >
                             {e.active ? "Active" : "Inactive"}
@@ -304,7 +304,7 @@ export default async function GridPage({
                         {editable("email") ? (
                           <EditableCell id={e.id} column="email" value={e.email} type="email" width="w-44" />
                         ) : e.email ? (
-                          <a href={`mailto:${e.email}`} className="text-blue-600 hover:underline">
+                          <a href={`mailto:${e.email}`} className="text-cyan-400 hover:underline">
                             {e.email}
                           </a>
                         ) : (
@@ -340,7 +340,7 @@ export default async function GridPage({
                             width="w-28"
                           />
                         ) : (
-                          <div className="text-xs text-gray-500">{e.driversLicenseNumber || ""}</div>
+                          <div className="text-xs text-slate-400">{e.driversLicenseNumber || ""}</div>
                         )}
                         <DocLinks docs={e.documents} category="LICENSE" />
                         {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}
@@ -382,7 +382,7 @@ export default async function GridPage({
                     )}
                     {show("certification") && (
                       <td className={td}>
-                        <div className="text-xs text-gray-500">{certNames}</div>
+                        <div className="text-xs text-slate-400">{certNames}</div>
                         <DocLinks docs={e.documents} category="CERTIFICATION" />
                         {editable("certification") && <UploadCell id={e.id} column="certification" />}
                       </td>
@@ -469,8 +469,8 @@ export default async function GridPage({
                               type="submit"
                               className={
                                 e.approved
-                                  ? "rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
-                                  : "rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                                  ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
+                                  : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
                               }
                             >
                               {e.approved ? "Approved ✓" : "Approve"}
@@ -480,8 +480,8 @@ export default async function GridPage({
                           <span
                             className={
                               e.approved
-                                ? "rounded-md bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
-                                : "rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500"
+                                ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
+                                : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
                             }
                           >
                             {e.approved ? "Approved ✓" : "Pending"}

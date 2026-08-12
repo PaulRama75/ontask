@@ -40,21 +40,21 @@ export default async function SitesPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Site Access</h1>
-      <p className="mt-1 text-sm text-gray-500">
+      <h1 className="text-2xl font-bold text-white">Site Access</h1>
+      <p className="mt-1 text-sm text-slate-400">
         Restrict which job sites each person can see in the data grid. A user with no sites
         selected is unrestricted (sees all). Admins and Super Admins always see every site.
       </p>
 
       {allSites.length === 0 ? (
-        <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <p className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
           No sites exist yet. Sites are set per employee in the Data Grid (the &ldquo;Site&rdquo;
           column, filled by the Project Lead). Add sites there first, then assign them here.
         </p>
       ) : (
-        <section className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <section className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Site access</th>
@@ -62,17 +62,17 @@ export default async function SitesPage() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-gray-100 align-top last:border-0">
+                <tr key={u.id} className="border-b border-white/10 align-top last:border-0">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{u.name || u.email}</div>
-                    <div className="text-xs text-gray-500">{u.email}</div>
-                    <span className="mt-1 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                    <div className="font-medium text-white">{u.name || u.email}</div>
+                    <div className="text-xs text-slate-400">{u.email}</div>
+                    <span className="mt-1 inline-block rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-medium text-slate-300">
                       {ROLE_LABELS[u.role as Role] ?? u.role}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     {isAdminRole(u.role) ? (
-                      <span className="text-xs text-gray-400">Full access (all sites)</span>
+                      <span className="text-xs text-slate-500">Full access (all sites)</span>
                     ) : (
                       <UserSiteEditor
                         userId={u.id}

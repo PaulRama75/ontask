@@ -21,7 +21,7 @@ export default function AddressCell({ id, addr }: { id: string; addr: Addr }) {
     }
   };
   const cls =
-    "rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none";
+    "rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none";
 
   return (
     <form action={setEmployeeField} className="flex flex-col gap-1">
