@@ -12,6 +12,7 @@ import {
   firstAllowedNavHref,
 } from "@/lib/rbac";
 import { setApproved, setActive } from "../actions";
+import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import GridControls from "./GridControls";
 import SiteCell from "./SiteCell";
 import RateCell from "./RateCell";
@@ -107,6 +108,10 @@ export default async function GridPage({
     },
   });
 
+  // Detected across the full unfiltered set so a duplicate's badge still
+  // shows even when its match got filtered out of view (e.g. different site).
+  const duplicateIds = findDuplicateEmployeeIds(all);
+
   const needle = q.trim().toLowerCase();
   const employees = all.filter((e) => {
     // Site-level access: restricted users only see their assigned sites.
@@ -139,6 +144,7 @@ export default async function GridPage({
     if (status === "missing_docs" && e.documents.length > 0) return false;
     if (status === "active" && !e.active) return false;
     if (status === "inactive" && e.active) return false;
+    if (status === "duplicates" && !duplicateIds.has(e.id)) return false;
     return true;
   });
 
@@ -185,7 +191,11 @@ export default async function GridPage({
           </Link>
         </div>
 
-        <GridControls total={all.length} shown={employees.length} />
+        <GridControls
+          total={all.length}
+          shown={employees.length}
+          duplicateCount={duplicateIds.size}
+        />
 
         <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full border-collapse text-sm">
@@ -243,6 +253,14 @@ export default async function GridPage({
                           </Link>
                         ) : (
                           <span>{name}</span>
+                        )}
+                        {duplicateIds.has(e.id) && (
+                          <span
+                            title="Another employee shares this name or email — possible duplicate onboarding."
+                            className="ml-1 inline-block rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
+                          >
+                            Duplicate
+                          </span>
                         )}
                       </td>
                     )}

@@ -3,7 +3,15 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-export default function GridControls({ total, shown }: { total: number; shown: number }) {
+export default function GridControls({
+  total,
+  shown,
+  duplicateCount,
+}: {
+  total: number;
+  shown: number;
+  duplicateCount: number;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
@@ -56,6 +64,9 @@ export default function GridControls({ total, shown }: { total: number; shown: n
         <option value="active">Active</option>
         <option value="inactive">Inactive</option>
         <option value="missing_docs">Missing documents</option>
+        {duplicateCount > 0 && (
+          <option value="duplicates">Possible duplicates ({duplicateCount})</option>
+        )}
       </select>
 
       {(q || status !== "all") && (

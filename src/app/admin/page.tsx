@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
+import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import { createOnboardingLink } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,8 @@ export default async function AdminPage() {
     }),
   ]);
 
+  const duplicateIds = findDuplicateEmployeeIds(employees);
+
   return (
     <main className="min-h-screen bg-slate-950 py-10">
       <div className="mx-auto max-w-5xl px-4">
@@ -42,6 +45,12 @@ export default async function AdminPage() {
         <p className="mt-1 text-sm text-slate-400">
           Generate an onboarding link for a new employee, then track submissions.
         </p>
+        {duplicateIds.size > 0 && (
+          <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+            {duplicateIds.size} employee{duplicateIds.size === 1 ? "" : "s"} below share a name or
+            email with another record — check the "Duplicate" tag to spot possible re-onboards.
+          </p>
+        )}
 
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">New onboarding link</h2>
@@ -100,6 +109,14 @@ export default async function AdminPage() {
                       <Link href={`/admin/employee/${e.id}`} className="text-cyan-400 hover:underline">
                         {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
                       </Link>
+                      {duplicateIds.has(e.id) && (
+                        <span
+                          title="Another employee shares this name or email — possible duplicate onboarding."
+                          className="ml-1 inline-block rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
+                        >
+                          Duplicate
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-400">
                       {e.email ? (
