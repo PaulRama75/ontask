@@ -54,6 +54,7 @@ export const COLUMNS = [
   { key: "creditCard", label: "Credit Card" },
   { key: "emailNeeded", label: "Email Needed" },
   { key: "approved", label: "Approved" },
+  { key: "archived", label: "Archived" },
   // Not a grid column: gates who can open an employee's document library page
   // (full PII + all uploaded documents). View or Edit = may open; Hidden = blocked.
   { key: "library", label: "Employee Library" },
@@ -84,6 +85,7 @@ export function defaultAccess(role: Role, columnKey: string): ColumnAccess {
         [
           "site",
           "active",
+          "archived",
           "payRate",
           "billRate",
           "hireDate",

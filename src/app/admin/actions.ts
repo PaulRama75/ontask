@@ -318,3 +318,15 @@ export async function setActive(formData: FormData): Promise<void> {
   });
   revalidatePath("/admin/grid");
 }
+
+export async function setArchived(formData: FormData): Promise<void> {
+  await requireColumn("archived", "edit");
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return;
+  const archived = String(formData.get("archived") ?? "") === "true";
+  await prisma.employee.update({
+    where: { id },
+    data: { archived },
+  });
+  revalidatePath("/admin/grid");
+}

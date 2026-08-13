@@ -11,7 +11,7 @@ import {
   getNavAccess,
   firstAllowedNavHref,
 } from "@/lib/rbac";
-import { setApproved, setActive } from "../actions";
+import { setApproved, setActive, setArchived } from "../actions";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import GridControls from "./GridControls";
 import SiteCell from "./SiteCell";
@@ -70,7 +70,7 @@ function DocLinks({ docs, category }: { docs: DocLite[]; category: string }) {
 export default async function GridPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; archived?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
@@ -88,7 +88,8 @@ export default async function GridPage({
   );
   const canOpenDetails = canLibrary || canPLDetails;
 
-  const { q = "", status = "all" } = await searchParams;
+  const { q = "", status = "all", archived: archivedParam } = await searchParams;
+  const showArchived = archivedParam === "1";
 
   // Site-level (row) access: a non-admin with assigned sites only sees those.
   let restrictedSites: Set<string> | null = null;
@@ -114,6 +115,8 @@ export default async function GridPage({
 
   const needle = q.trim().toLowerCase();
   const employees = all.filter((e) => {
+    // Archived employees are hidden from every other view until explicitly shown.
+    if (e.archived !== showArchived) return false;
     // Site-level access: restricted users only see their assigned sites.
     if (restrictedSites && !(e.site && restrictedSites.has(e.site))) return false;
     // Text search across the visible identity/contact fields + cert names.
@@ -167,6 +170,7 @@ export default async function GridPage({
     "creditCard",
     "emailNeeded",
     "approved",
+    "archived",
   ];
   // Pay Rate and Bill Rate are separately access-controlled columns.
   const visibleCount =
@@ -192,9 +196,11 @@ export default async function GridPage({
         </div>
 
         <GridControls
-          total={all.length}
+          total={all.filter((e) => e.archived === showArchived).length}
           shown={employees.length}
           duplicateCount={duplicateIds.size}
+          showArchived={showArchived}
+          archivedCount={all.filter((e) => e.archived).length}
         />
 
         <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
@@ -220,6 +226,7 @@ export default async function GridPage({
                 {show("creditCard") && <th className={th}>Credit Card</th>}
                 {show("emailNeeded") && <th className={th}>Email Needed</th>}
                 {show("approved") && <th className={th}>Approved</th>}
+                {show("archived") && <th className={th}>Archived</th>}
               </tr>
             </thead>
             <tbody>
@@ -514,6 +521,37 @@ export default async function GridPage({
                             }
                           >
                             {e.approved ? "Approved ✓" : "Pending"}
+                          </span>
+                        )}
+                      </td>
+                    )}
+                    {show("archived") && (
+                      <td className={`${td} whitespace-nowrap text-center`}>
+                        {editable("archived") ? (
+                          <form action={setArchived}>
+                            <input type="hidden" name="employeeId" value={e.id} />
+                            <input type="hidden" name="archived" value={(!e.archived).toString()} />
+                            <button
+                              type="submit"
+                              className={
+                                e.archived
+                                  ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
+                                  : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+                              }
+                              title="Click to toggle"
+                            >
+                              {e.archived ? "Unarchive" : "Archive"}
+                            </button>
+                          </form>
+                        ) : (
+                          <span
+                            className={
+                              e.archived
+                                ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300"
+                                : "text-slate-500"
+                            }
+                          >
+                            {e.archived ? "Archived" : "—"}
                           </span>
                         )}
                       </td>

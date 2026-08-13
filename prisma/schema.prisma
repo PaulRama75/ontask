@@ -46,6 +46,7 @@ model Employee {
   // Project Lead managed fields
   site       String?  // job site / location
   active     Boolean  @default(true)
+  archived   Boolean  @default(false) // hidden from the grid by default once set
 
   // Project Lead assigned at onboarding-link creation; notified on completion.
   projectLeadEmail String?
