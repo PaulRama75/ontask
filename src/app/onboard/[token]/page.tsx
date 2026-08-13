@@ -13,12 +13,13 @@ export default async function OnboardPage({
 
   const link = await prisma.onboardingLink.findUnique({
     where: { token },
-    include: { employee: true },
+    include: { employee: { include: { documents: { select: { category: true } } } } },
   });
 
   if (!link) notFound();
 
   const e = link.employee;
+  const existingDocCategories = [...new Set(e.documents.map((d) => d.category))];
 
   return (
     <main className="min-h-screen bg-slate-950 py-10">
@@ -39,6 +40,7 @@ export default async function OnboardPage({
         <OnboardingForm
           token={token}
           alreadySubmitted={link.usedAt != null}
+          existingDocCategories={existingDocCategories}
           employee={{
             firstName: e.firstName,
             lastName: e.lastName,

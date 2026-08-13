@@ -46,6 +46,39 @@ export async function submitOnboarding(
     .filter(Boolean)
     .join(" ");
 
+  // Server-side enforcement of required fields (the client's `required`
+  // attributes are a UX hint only, not real validation, since a form can
+  // always be submitted programmatically).
+  const missing: string[] = [];
+  if (!str(form, "phone")) missing.push("Phone");
+  if (!str(form, "addressLine1")) missing.push("Address line 1");
+  if (!str(form, "city")) missing.push("City");
+  if (!str(form, "state")) missing.push("State");
+  if (!str(form, "zip")) missing.push("ZIP");
+  if (!str(form, "driversLicenseNumber")) missing.push("Driver's license #");
+
+  // Driver's License and Social Security Card documents: required unless
+  // one is already on file from a previous submission.
+  const REQUIRED_DOC_CATEGORIES: { key: string; label: string }[] = [
+    { key: "LICENSE", label: "Driver's License document" },
+    { key: "SSN", label: "Social Security Card document" },
+  ];
+  const existingRequiredDocs = await prisma.document.findMany({
+    where: { employeeId, category: { in: REQUIRED_DOC_CATEGORIES.map((c) => c.key) } },
+    select: { category: true },
+  });
+  const hasExisting = (cat: string) => existingRequiredDocs.some((d) => d.category === cat);
+  for (const cat of REQUIRED_DOC_CATEGORIES) {
+    const hasNewFile = form
+      .getAll(`file_${cat.key}`)
+      .some((f) => f instanceof File && f.size > 0);
+    if (!hasNewFile && !hasExisting(cat.key)) missing.push(cat.label);
+  }
+
+  if (missing.length > 0) {
+    return { ok: false, error: `Please provide: ${missing.join(", ")}.` };
+  }
+
   // 1) Save the core employee data.
   await prisma.employee.update({
     where: { id: employeeId },
