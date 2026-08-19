@@ -299,6 +299,29 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
   if (canEdit(access, "creditCard")) data.creditCardApproved = triBool(s("creditCardApproved"));
   if (canEdit(access, "emailNeeded")) data.emailNeeded = triBool(s("emailNeeded"));
 
+  // Job assignment fields aren't individually access-controlled -- they're one
+  // cohesive block, gated the same way the section itself is: anyone who can
+  // edit at least one existing PL field can edit all of these too.
+  const canEditPL = ["site", "hireDate", "payRate", "billRate", "frc", "creditCard", "emailNeeded"].some(
+    (k) => canEdit(access, k),
+  );
+  if (canEditPL) {
+    const csv = (key: string) => formData.getAll(key).map(String).join(", ") || null;
+    data.urgency = s("urgency") || null;
+    data.employmentType = csv("employmentType");
+    data.positionType = csv("positionType");
+    data.directSupervisor = s("directSupervisor") || null;
+    data.jobNumber = s("jobNumber") || null;
+    data.jobSite = s("jobSite") || null;
+    data.drivingRecordRequired = triBool(s("drivingRecordRequired"));
+    data.liftOperatorCertifications = s("liftOperatorCertifications") || null;
+    data.siteSpecificsNeeded = triBool(s("siteSpecificsNeeded"));
+    data.fitTestNeeded = triBool(s("fitTestNeeded"));
+    data.additionalTrainingsNeeded = s("additionalTrainingsNeeded") || null;
+    data.safetyEquipmentNeeded = csv("safetyEquipmentNeeded");
+    data.additionalEquipmentNeeds = s("additionalEquipmentNeeds") || null;
+  }
+
   if (Object.keys(data).length > 0) {
     await prisma.employee.update({ where: { id }, data });
   }

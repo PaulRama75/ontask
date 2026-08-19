@@ -62,6 +62,21 @@ model Employee {
   creditCardApproved Boolean?  // company credit card approved?
   emailNeeded        Boolean?  // does the employee need a company email?
 
+  // Project Lead job assignment details
+  urgency                    String?   // URGENT | NON_URGENT
+  employmentType             String?   // comma-separated: Full Time, Part Time, 1099 Employee, Benefits, No Benefits
+  positionType               String?   // comma-separated: Administrative, Field Personnel, Supervision, Management
+  directSupervisor           String?
+  jobNumber                  String?
+  jobSite                    String?   // specific job/project site, distinct from the general "site" field above
+  drivingRecordRequired      Boolean?
+  liftOperatorCertifications String?
+  siteSpecificsNeeded        Boolean?
+  fitTestNeeded               Boolean?
+  additionalTrainingsNeeded  String?
+  safetyEquipmentNeeded      String?   // comma-separated: N/A, H2S monitor, Four Gas, Harness, Lanyard, Hard Hat, Safety glasses, Gloves, Goggles
+  additionalEquipmentNeeds   String?
+
   // Onboarding lifecycle: DRAFT, SUBMITTED, HR_REVIEW, RATES_ASSIGNED, APPROVED
   status     String   @default("DRAFT")
   source     String   @default("LINK") // LINK or EXCEL

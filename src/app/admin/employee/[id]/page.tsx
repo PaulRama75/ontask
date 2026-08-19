@@ -19,6 +19,25 @@ const PL_FIELDS = [
   "emailNeeded",
 ] as const;
 
+// Job-assignment checkbox groups (multi-select, stored as comma-separated strings).
+const EMPLOYMENT_TYPE_OPTIONS = ["Full Time", "Part Time", "1099 Employee", "Benefits", "No Benefits"];
+const POSITION_TYPE_OPTIONS = ["Administrative", "Field Personnel", "Supervision", "Management"];
+const SAFETY_EQUIPMENT_OPTIONS = [
+  "N/A",
+  "H2S monitor",
+  "Four Gas",
+  "Harness",
+  "Lanyard",
+  "Hard Hat",
+  "Safety glasses",
+  "Gloves",
+  "Goggles",
+];
+
+function csvToList(v: string | null): string[] {
+  return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+
 function dateInputValue(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "";
 }
@@ -173,6 +192,152 @@ export default async function EmployeeLibraryPage({
                 </PLField>
               )}
 
+              {(canEditPL || canLib) && (
+                <>
+                  <PLField label="Urgency">
+                    {canEditPL ? (
+                      <select name="urgency" defaultValue={e.urgency ?? ""} className={inputCls}>
+                        <option value="">—</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="NON_URGENT">Non-Urgent</option>
+                      </select>
+                    ) : (
+                      <ReadOnly value={e.urgency === "URGENT" ? "Urgent" : e.urgency === "NON_URGENT" ? "Non-Urgent" : null} />
+                    )}
+                  </PLField>
+
+                  <div className="sm:col-span-2">
+                    <PLField label="Employment Type">
+                      {canEditPL ? (
+                        <CheckboxGroup
+                          name="employmentType"
+                          options={EMPLOYMENT_TYPE_OPTIONS}
+                          selected={csvToList(e.employmentType)}
+                        />
+                      ) : (
+                        <ReadOnly value={e.employmentType} />
+                      )}
+                    </PLField>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <PLField label="Position Type">
+                      {canEditPL ? (
+                        <CheckboxGroup
+                          name="positionType"
+                          options={POSITION_TYPE_OPTIONS}
+                          selected={csvToList(e.positionType)}
+                        />
+                      ) : (
+                        <ReadOnly value={e.positionType} />
+                      )}
+                    </PLField>
+                  </div>
+
+                  <PLField label="Direct Supervisor">
+                    {canEditPL ? (
+                      <input name="directSupervisor" defaultValue={e.directSupervisor ?? ""} className={inputCls} />
+                    ) : (
+                      <ReadOnly value={e.directSupervisor} />
+                    )}
+                  </PLField>
+
+                  <PLField label="Job Number">
+                    {canEditPL ? (
+                      <input name="jobNumber" defaultValue={e.jobNumber ?? ""} className={inputCls} />
+                    ) : (
+                      <ReadOnly value={e.jobNumber} />
+                    )}
+                  </PLField>
+
+                  <PLField label="Job Site">
+                    {canEditPL ? (
+                      <input name="jobSite" defaultValue={e.jobSite ?? ""} className={inputCls} />
+                    ) : (
+                      <ReadOnly value={e.jobSite} />
+                    )}
+                  </PLField>
+
+                  <PLField label="Driving Record Required">
+                    {canEditPL ? (
+                      <select name="drivingRecordRequired" defaultValue={triValue(e.drivingRecordRequired)} className={inputCls}>
+                        <option value="">—</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    ) : (
+                      <ReadOnly value={yesNoText(e.drivingRecordRequired)} />
+                    )}
+                  </PLField>
+
+                  <PLField label="Current Lift Operator Certifications (if applicable)">
+                    {canEditPL ? (
+                      <input name="liftOperatorCertifications" defaultValue={e.liftOperatorCertifications ?? ""} className={inputCls} />
+                    ) : (
+                      <ReadOnly value={e.liftOperatorCertifications} />
+                    )}
+                  </PLField>
+
+                  <PLField label="Site Specifics Needed">
+                    {canEditPL ? (
+                      <select name="siteSpecificsNeeded" defaultValue={triValue(e.siteSpecificsNeeded)} className={inputCls}>
+                        <option value="">—</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    ) : (
+                      <ReadOnly value={yesNoText(e.siteSpecificsNeeded)} />
+                    )}
+                  </PLField>
+
+                  <PLField label="Fit Test Needed">
+                    {canEditPL ? (
+                      <select name="fitTestNeeded" defaultValue={triValue(e.fitTestNeeded)} className={inputCls}>
+                        <option value="">—</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    ) : (
+                      <ReadOnly value={yesNoText(e.fitTestNeeded)} />
+                    )}
+                  </PLField>
+
+                  <div className="sm:col-span-2">
+                    <PLField label="Additional Trainings Needed">
+                      {canEditPL ? (
+                        <textarea name="additionalTrainingsNeeded" defaultValue={e.additionalTrainingsNeeded ?? ""} rows={2} className={inputCls} />
+                      ) : (
+                        <ReadOnly value={e.additionalTrainingsNeeded} />
+                      )}
+                    </PLField>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <PLField label="Safety Equipment Needed">
+                      {canEditPL ? (
+                        <CheckboxGroup
+                          name="safetyEquipmentNeeded"
+                          options={SAFETY_EQUIPMENT_OPTIONS}
+                          selected={csvToList(e.safetyEquipmentNeeded)}
+                        />
+                      ) : (
+                        <ReadOnly value={e.safetyEquipmentNeeded} />
+                      )}
+                    </PLField>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <PLField label="Additional Equipment Needs (e.g. UT Kit)">
+                      {canEditPL ? (
+                        <input name="additionalEquipmentNeeds" defaultValue={e.additionalEquipmentNeeds ?? ""} className={inputCls} />
+                      ) : (
+                        <ReadOnly value={e.additionalEquipmentNeeds} />
+                      )}
+                    </PLField>
+                  </div>
+                </>
+              )}
+
               {canEditPL && (
                 <div className="sm:col-span-2">
                   <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
@@ -294,4 +459,31 @@ function PLField({ label, children }: { label: string; children: React.ReactNode
 
 function ReadOnly({ value }: { value?: string | null }) {
   return <div className="text-white">{value || "—"}</div>;
+}
+
+function CheckboxGroup({
+  name,
+  options,
+  selected,
+}: {
+  name: string;
+  options: string[];
+  selected: string[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+      {options.map((opt) => (
+        <label key={opt} className="flex items-center gap-1.5 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            name={name}
+            value={opt}
+            defaultChecked={selected.includes(opt)}
+            className="h-4 w-4 rounded border-white/10 bg-slate-800"
+          />
+          {opt}
+        </label>
+      ))}
+    </div>
+  );
 }
