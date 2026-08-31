@@ -152,7 +152,7 @@ async function main() {
   });
 
   for (const emp of EMPLOYEES) {
-    const existing = await prisma.employee.findUnique({ where: { email: emp.email } });
+    const existing = await prisma.employee.findFirst({ where: { email: emp.email } });
     if (existing) {
       console.log(`Employee already exists: ${emp.email}`);
       continue;
