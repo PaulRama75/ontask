@@ -1,10 +1,13 @@
 name: ontask
 region: nyc
+domains:
+  - domain: ontask.ferinspection.com
+    type: PRIMARY
 services:
   - name: web
     github:
       repo: PaulRama75/ontask
-      branch: main
+      branch: master
       deploy_on_push: true
     build_command: npm run build
     run_command: npm start
@@ -36,7 +39,7 @@ services:
         type: SECRET
       - key: APP_BASE_URL
         scope: RUN_AND_BUILD_TIME
-        type: SECRET
+        value: "https://ontask.ferinspection.com"
       - key: RESEND_API_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET
