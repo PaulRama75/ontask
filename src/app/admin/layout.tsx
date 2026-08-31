@@ -20,7 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <header className="border-b border-white/10 bg-slate-900/80 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center gap-6 px-4 py-3">
           <Link href="/admin/grid" className="text-sm font-bold tracking-wide text-cyan-400">
             FER

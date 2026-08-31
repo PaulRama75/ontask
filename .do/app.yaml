@@ -1,0 +1,48 @@
+name: ontask
+region: nyc
+services:
+  - name: web
+    github:
+      repo: PaulRama75/ontask
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    run_command: npm start
+    environment_slug: node-js
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 1
+    http_port: 3000
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: STORAGE_DRIVER
+        scope: RUN_AND_BUILD_TIME
+        value: "S3"
+      - key: S3_ENDPOINT
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: S3_REGION
+        scope: RUN_AND_BUILD_TIME
+        value: "us-east-1"
+      - key: S3_BUCKET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: S3_ACCESS_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: S3_SECRET_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: APP_BASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: RESEND_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: EMAIL_FROM
+        scope: RUN_AND_BUILD_TIME
+        value: "onboarding@fer.local"
+      - key: HR_NOTIFY_EMAIL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET

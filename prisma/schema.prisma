@@ -1,16 +1,14 @@
 // FER Employee Onboarding — Prisma schema
-// Local dev uses SQLite. To move to DigitalOcean Managed Postgres later:
-//   1) change provider to "postgresql"
-//   2) set DATABASE_URL to the DO connection string
-//   3) run `npx prisma migrate dev`
-// Enums are modeled as String for SQLite portability (validated in app code).
+// Runs on DigitalOcean Managed Postgres in both dev and production; DATABASE_URL
+// points at a dev database locally and the production one on App Platform.
+// Enums are modeled as String for portability (validated in app code).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

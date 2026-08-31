@@ -1,10 +1,10 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
-// Storage abstraction. Phase 1 uses the local filesystem.
-// To switch to DigitalOcean Spaces: set STORAGE_DRIVER=S3 and fill S3_* env vars,
-// then implement the S3 branch with @aws-sdk/client-s3 (PutObjectCommand).
+// Storage abstraction. LOCAL uses the filesystem (dev only — App Platform's disk
+// is ephemeral). S3 uses DigitalOcean Spaces (S3-compatible) for production.
 // The rest of the app only depends on saveFile() / getFile() / the storageKey string.
 
 export type SavedFile = {
@@ -18,7 +18,42 @@ const LOCAL_DIR = process.env.LOCAL_STORAGE_DIR ?? "./storage";
 const LIBRARY_ROOT = "library";
 
 function localPathFor(key: string) {
-  return path.join(process.cwd(), LOCAL_DIR, key);
+  return path.join(/* turbopackIgnore: true */ process.cwd(), LOCAL_DIR, key);
+}
+
+let s3Client: S3Client | null = null;
+function getS3Client(): S3Client {
+  if (s3Client) return s3Client;
+  s3Client = new S3Client({
+    endpoint: process.env.S3_ENDPOINT,
+    region: process.env.S3_REGION ?? "us-east-1",
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY!,
+      secretAccessKey: process.env.S3_SECRET_KEY!,
+    },
+    forcePathStyle: false,
+  });
+  return s3Client;
+}
+
+const S3_BUCKET = process.env.S3_BUCKET;
+
+async function s3Put(key: string, buffer: Buffer): Promise<void> {
+  await getS3Client().send(
+    new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: buffer }),
+  );
+}
+
+async function s3Get(key: string): Promise<Buffer | null> {
+  try {
+    const res = await getS3Client().send(
+      new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
+    );
+    const bytes = await res.Body!.transformToByteArray();
+    return Buffer.from(bytes);
+  } catch {
+    return null;
+  }
 }
 
 // Turn arbitrary text into a safe, readable path segment.
@@ -56,8 +91,8 @@ export async function saveFile(
     return { storageKey: key, size: buffer.length };
   }
 
-  // TODO(S3): implement DigitalOcean Spaces upload here.
-  throw new Error(`Storage driver "${DRIVER}" not implemented yet`);
+  await s3Put(key, buffer);
+  return { storageKey: key, size: buffer.length };
 }
 
 // Organizes invoice attachments as:
@@ -80,7 +115,8 @@ export async function saveInvoiceFile(
     return { storageKey: key, size: buffer.length };
   }
 
-  throw new Error(`Storage driver "${DRIVER}" not implemented yet`);
+  await s3Put(key, buffer);
+  return { storageKey: key, size: buffer.length };
 }
 
 export async function getFile(
@@ -94,5 +130,6 @@ export async function getFile(
       return null;
     }
   }
-  throw new Error(`Storage driver "${DRIVER}" not implemented yet`);
+  const buffer = await s3Get(key);
+  return buffer ? { buffer } : null;
 }
