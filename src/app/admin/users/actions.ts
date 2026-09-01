@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
-import { ROLES, isAdminRole } from "@/lib/rbac";
+import { ROLES, isAdminRole, ROLE_LABELS, type Role } from "@/lib/rbac";
+import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 
 async function requireAdmin() {
@@ -32,6 +33,20 @@ export async function createUser(form: FormData): Promise<UserActionResult> {
   await prisma.user.create({
     data: { email, name, role, passwordHash: hashPassword(password) },
   });
+
+  const base = process.env.APP_BASE_URL ?? "http://localhost:3000";
+  const url = `${base}/login`;
+  const greeting = name ? `Hi ${name},` : "Hello,";
+  await sendEmail({
+    to: email,
+    subject: "Your FER account is ready",
+    html: `<p>${greeting}</p>
+<p>An account has been created for you on the FER Employee Onboarding system as <strong>${ROLE_LABELS[role as Role] ?? role}</strong>.</p>
+<p>Sign in here: <a href="${url}">${url}</a></p>
+<p>Username: ${email}<br>Password: ${password}</p>
+<p>Please sign in and change your password when you get a chance.</p>`,
+  });
+
   revalidatePath("/admin/users");
   return { ok: true };
 }
