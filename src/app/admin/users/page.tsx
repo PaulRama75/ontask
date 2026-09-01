@@ -42,6 +42,7 @@ export default async function UsersPage() {
                   <form action={setUserRole} className="flex items-center gap-2">
                     <input type="hidden" name="userId" value={u.id} />
                     <select
+                      key={u.role}
                       name="role"
                       defaultValue={u.role}
                       disabled={u.id === me.id}
