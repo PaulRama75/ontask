@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { login } from "./actions";
 
 export default function LoginPage() {
@@ -24,7 +25,12 @@ export default function LoginPage() {
           className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
         />
 
-        <label className="mt-4 block text-sm font-medium text-slate-300">Password</label>
+        <div className="mt-4 flex items-center justify-between">
+          <label className="block text-sm font-medium text-slate-300">Password</label>
+          <Link href="/forgot-password" className="text-xs text-cyan-400 hover:text-cyan-300">
+            Forgot password?
+          </Link>
+        </div>
         <input
           name="password"
           type="password"

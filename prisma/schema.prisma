@@ -127,6 +127,7 @@ model User {
   createdAt    DateTime   @default(now())
   sessions     Session[]
   sites        UserSite[]
+  resetTokens  PasswordResetToken[]
 }
 
 // Site-level (row) access. A non-admin user with one or more UserSite rows is
@@ -148,6 +149,17 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+// A single-use, expiring token for the "forgot password" flow.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 }
 
 // Per-column access for a role. level: HIDDEN | VIEW | EDIT.
