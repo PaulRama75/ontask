@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { login } from "./actions";
 
@@ -31,9 +32,7 @@ export default function LoginPage() {
         className="relative w-full max-w-sm rounded-xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-cyan-500/10 backdrop-blur-xl"
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/30">
-            FER
-          </div>
+          <Image src="/logoblack.png" alt="FER" width={56} height={36} className="h-10 w-auto drop-shadow-[0_0_12px_rgba(34,211,238,0.35)]" priority />
           <div>
             <h1 className="text-xl font-bold text-white">Sign in</h1>
             <p className="text-xs text-slate-400">Employee data system</p>

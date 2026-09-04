@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser, destroySession } from "@/lib/auth";
@@ -22,8 +23,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen bg-slate-950">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center gap-6 px-4 py-3">
-          <Link href="/admin/grid" className="text-sm font-bold tracking-wide text-cyan-400">
-            FER
+          <Link href="/admin/grid" className="flex items-center">
+            <Image src="/logoblack.png" alt="FER" width={40} height={26} className="h-7 w-auto" priority />
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             {NAV_ITEMS.filter((item) => nav[item.key]).map((item) => (
