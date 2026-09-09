@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { STATUS_LABEL } from "../statusLabels";
 import AttachmentUploadForm from "../AttachmentUploadForm";
+import DownloadAllButton from "../DownloadAllButton";
 import {
   addLineItem,
   deleteLineItem,
@@ -195,11 +196,16 @@ export default async function InvoiceDetailPage({
         </section>
 
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <h2 className="text-lg font-semibold text-white">Attachments</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Attachments</h2>
+            {invoice.attachments.length > 1 && (
+              <DownloadAllButton attachmentIds={invoice.attachments.map((a) => a.id)} />
+            )}
+          </div>
           <ul className="mt-3 space-y-1 text-sm">
             {invoice.attachments.length === 0 && <li className="text-slate-500">No attachments yet.</li>}
             {invoice.attachments.map((att) => (
-              <li key={att.id} className="flex items-center justify-between">
+              <li key={att.id} className="flex items-center justify-between gap-3">
                 <a
                   href={`/api/invoice-files/${att.id}`}
                   target="_blank"
@@ -207,12 +213,20 @@ export default async function InvoiceDetailPage({
                 >
                   {att.fileName} <span className="text-xs text-slate-500">({att.category})</span>
                 </a>
-                {isDraftEditable && (
-                  <form action={deleteInvoiceAttachment}>
-                    <input type="hidden" name="attachmentId" value={att.id} />
-                    <button className="text-xs text-rose-300 hover:underline">Remove</button>
-                  </form>
-                )}
+                <span className="flex items-center gap-3">
+                  <a
+                    href={`/api/invoice-files/${att.id}?dl=1`}
+                    className="text-xs font-medium text-cyan-400 hover:underline"
+                  >
+                    Download
+                  </a>
+                  {isDraftEditable && (
+                    <form action={deleteInvoiceAttachment}>
+                      <input type="hidden" name="attachmentId" value={att.id} />
+                      <button className="text-xs text-rose-300 hover:underline">Remove</button>
+                    </form>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

@@ -6,11 +6,12 @@ import { isAdminRole } from "@/lib/rbac";
 // Serves an invoice attachment. Unlike /api/files/[id] (employee documents,
 // currently unauthenticated), this route checks the caller's role/ownership
 // since invoice attachments (timesheets, client info) are more sensitive.
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentUser();
   if (!me) return new Response("Unauthorized", { status: 401 });
 
   const { id } = await params;
+  const download = new URL(req.url).searchParams.has("dl");
   const att = await prisma.invoiceAttachment.findUnique({
     where: { id },
     include: { invoice: true },
@@ -27,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return new Response(new Uint8Array(file.buffer), {
     headers: {
       "Content-Type": att.mimeType,
-      "Content-Disposition": `inline; filename="${encodeURIComponent(att.fileName)}"`,
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${encodeURIComponent(att.fileName)}"`,
     },
   });
 }
