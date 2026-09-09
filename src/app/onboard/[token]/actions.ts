@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { saveFile } from "@/lib/storage";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, emailButton } from "@/lib/email";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
 import { revalidatePath } from "next/cache";
 
@@ -175,7 +175,7 @@ export async function submitOnboarding(
     const base = process.env.APP_BASE_URL ?? "http://localhost:3000";
     const subject = `Onboarding submitted: ${who}`;
     const html = `<p>${who} completed onboarding and is ready for review.</p>
-<p><a href="${base}/admin/grid">Open the employee data grid</a></p>`;
+${emailButton(`${base}/admin/grid`, "Open Employee Data Grid")}`;
     await Promise.all(
       [...recipients].map((to) => sendEmail({ to, subject, html })),
     );
