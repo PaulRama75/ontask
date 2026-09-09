@@ -184,3 +184,93 @@ ${emailButton(`${base}/admin/grid`, "Open Employee Data Grid")}`;
   revalidatePath(`/onboard/${token}`);
   return { ok: true };
 }
+
+// Persists whatever's been filled in so far, without the required-field
+// checks, without marking the link "used", and without notifying HR — lets
+// someone fill this out across multiple visits instead of losing everything
+// if they can't finish in one sitting.
+export async function saveOnboardingDraft(
+  token: string,
+  form: FormData,
+): Promise<SubmitResult> {
+  const link = await prisma.onboardingLink.findUnique({ where: { token } });
+  if (!link) return { ok: false, error: "Invalid or expired link." };
+
+  const employeeId = link.employeeId;
+  const employeeName = [str(form, "firstName"), str(form, "lastName")]
+    .filter(Boolean)
+    .join(" ");
+
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: {
+      firstName: str(form, "firstName"),
+      lastName: str(form, "lastName"),
+      email: str(form, "email"),
+      phone: str(form, "phone"),
+      ssn: str(form, "ssn"),
+      addressLine1: str(form, "addressLine1"),
+      addressLine2: str(form, "addressLine2"),
+      city: str(form, "city"),
+      state: str(form, "state"),
+      zip: str(form, "zip"),
+      driversLicenseNumber: str(form, "driversLicenseNumber"),
+      safetyCouncilId: str(form, "safetyCouncilId"),
+      safetyCouncilExpiry: dateOrNull(form, "safetyCouncilExpiry"),
+      twicNumber: str(form, "twicNumber"),
+      twicExpiry: dateOrNull(form, "twicExpiry"),
+    },
+  });
+
+  const certNames = form.getAll("certName").map((v) => String(v).trim());
+  if (certNames.some((n) => n.length > 0)) {
+    const certIssuers = form.getAll("certIssuer").map((v) => String(v).trim());
+    const certIssued = form.getAll("certIssued").map((v) => String(v).trim());
+    const certExpiry = form.getAll("certExpiry").map((v) => String(v).trim());
+
+    await prisma.certification.deleteMany({ where: { employeeId } });
+    const certs = certNames
+      .map((name, i) => ({
+        employeeId,
+        name,
+        issuer: certIssuers[i] || null,
+        issuedDate: certIssued[i] ? new Date(certIssued[i]) : null,
+        expiryDate: certExpiry[i] ? new Date(certExpiry[i]) : null,
+      }))
+      .filter((c) => c.name.length > 0);
+    if (certs.length) await prisma.certification.createMany({ data: certs });
+  }
+
+  const categories = DOCUMENT_CATEGORIES.map((c) => c.key);
+  for (const cat of categories) {
+    const files = form.getAll(`file_${cat}`).filter((f): f is File => f instanceof File && f.size > 0);
+    for (const file of files) {
+      if (file.size > MAX_FILE_BYTES) {
+        return { ok: false, error: `"${file.name}" exceeds the 15 MB limit.` };
+      }
+      if (file.type && !ALLOWED_MIME.has(file.type)) {
+        return { ok: false, error: `"${file.name}" must be a PDF or image.` };
+      }
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const saved = await saveFile(buffer, file.name, {
+        employeeName,
+        employeeId,
+        category: cat,
+      });
+      await prisma.document.create({
+        data: {
+          employeeId,
+          category: cat,
+          label: file.name,
+          fileName: file.name,
+          storageKey: saved.storageKey,
+          mimeType: file.type || "application/octet-stream",
+          size: saved.size,
+        },
+      });
+    }
+  }
+
+  revalidatePath(`/onboard/${token}`);
+  return { ok: true };
+}

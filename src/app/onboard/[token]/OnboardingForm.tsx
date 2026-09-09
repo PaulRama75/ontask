@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { DOCUMENT_CATEGORIES, US_STATES } from "@/lib/constants";
-import { submitOnboarding } from "./actions";
+import { submitOnboarding, saveOnboardingDraft } from "./actions";
 
 type EmployeeData = {
   firstName: string | null;
@@ -47,9 +47,12 @@ export default function OnboardingForm({
     { name: "", issuer: "", issued: "", expiry: "" },
   ]);
   const [isPending, startTransition] = useTransition();
+  const [isSaving, startSaveTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   function updateCert(i: number, patch: Partial<CertRow>) {
     setCerts((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -75,10 +78,26 @@ export default function OnboardingForm({
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setSaved(false);
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await submitOnboarding(token, form);
       if (res.ok) setDone(true);
+      else setError(res.error);
+    });
+  }
+
+  // Bypasses the form's native required-field validation entirely (this is a
+  // plain button, not a submit) so partial progress can be saved even when
+  // required fields or documents aren't filled in yet.
+  function onSaveDraft() {
+    if (!formRef.current) return;
+    setError(null);
+    setSaved(false);
+    const form = new FormData(formRef.current);
+    startSaveTransition(async () => {
+      const res = await saveOnboardingDraft(token, form);
+      if (res.ok) setSaved(true);
       else setError(res.error);
     });
   }
@@ -96,7 +115,12 @@ export default function OnboardingForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
+    <form ref={formRef} onSubmit={onSubmit} className="space-y-8">
+      <p className="rounded-md border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-300">
+        You can save your progress at any time and come back to this same link later to finish —
+        nothing needs to be complete until you click <strong>Submit onboarding</strong>.
+      </p>
+
       {alreadySubmitted && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
           This onboarding was already submitted. Submitting again will update your
@@ -208,10 +232,29 @@ export default function OnboardingForm({
       {error && (
         <div className="rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>
       )}
+      {saved && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+          Progress saved. You can close this page and pick up where you left off with the same link.
+        </div>
+      )}
 
-      <button type="submit" disabled={isPending} className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60">
-        {isPending ? "Submitting…" : "Submit onboarding"}
-      </button>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={isSaving || isPending}
+          className="w-full rounded-md border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-60 sm:w-auto"
+        >
+          {isSaving ? "Saving…" : "Save progress"}
+        </button>
+        <button
+          type="submit"
+          disabled={isPending || isSaving}
+          className="w-full flex-1 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60"
+        >
+          {isPending ? "Submitting…" : "Submit onboarding"}
+        </button>
+      </div>
     </form>
   );
 }
