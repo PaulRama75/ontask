@@ -112,7 +112,7 @@ export default async function InvoicesPage({
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 py-8">
+    <main className="min-h-screen py-8">
       <div className="mx-auto max-w-5xl px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>

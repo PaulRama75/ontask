@@ -8,7 +8,7 @@ export default function ForgotPasswordPage() {
   const [state, formAction, pending] = useActionState(requestPasswordReset, undefined);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+    <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 p-8 shadow-lg shadow-black/40 backdrop-blur">
         <p className="text-sm font-semibold uppercase tracking-wide text-cyan-400">FER</p>
         <h1 className="mt-1 text-xl font-bold text-white">Reset your password</h1>

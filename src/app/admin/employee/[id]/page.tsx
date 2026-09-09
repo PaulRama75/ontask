@@ -80,7 +80,7 @@ export default async function EmployeeLibraryPage({
   const docsByCategory = (cat: string) => e.documents.filter((d) => d.category === cat);
 
   return (
-    <main className="min-h-screen bg-slate-950 py-10">
+    <main className="min-h-screen py-10">
       <div className="mx-auto max-w-4xl px-4">
         <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
           ← Back to admin

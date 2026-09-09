@@ -34,7 +34,7 @@ export default async function AdminPage() {
   const duplicateIds = findDuplicateEmployeeIds(employees);
 
   return (
-    <main className="min-h-screen bg-slate-950 py-10">
+    <main className="min-h-screen py-10">
       <div className="mx-auto max-w-5xl px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-white">Admin · Onboarding</h1>
@@ -103,6 +103,8 @@ export default async function AdminPage() {
               )}
               {employees.map((e) => {
                 const link = e.onboardingLink ? `${base}/onboard/${e.onboardingLink.token}` : null;
+                const employeeName = [e.firstName, e.lastName].filter(Boolean).join(" ") || "employee";
+                const linkLabel = `${employeeName}_onboarding`;
                 return (
                   <tr key={e.id} className="border-b border-white/10 last:border-0">
                     <td className="px-4 py-3 font-medium">
@@ -134,8 +136,8 @@ export default async function AdminPage() {
                     <td className="px-4 py-3 text-slate-400">{e._count.certifications}</td>
                     <td className="px-4 py-3">
                       {link ? (
-                        <a href={link} className="break-all text-cyan-400 hover:underline" target="_blank">
-                          {link}
+                        <a href={link} className="text-cyan-400 hover:underline" target="_blank" title={link}>
+                          {linkLabel}
                         </a>
                       ) : (
                         "—"

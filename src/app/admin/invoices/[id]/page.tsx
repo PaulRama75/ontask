@@ -80,7 +80,7 @@ export default async function InvoiceDetailPage({
   const td = "px-2 py-1.5 text-slate-200";
 
   return (
-    <main className="min-h-screen bg-slate-950 py-8">
+    <main className="min-h-screen py-8">
       <div className="mx-auto max-w-3xl px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>

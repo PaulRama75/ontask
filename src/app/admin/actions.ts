@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, emailButton } from "@/lib/email";
 import { saveFile } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
@@ -55,7 +55,7 @@ export async function createOnboardingLink(form: FormData): Promise<void> {
     subject: "Complete your FER onboarding",
     html: `<p>${greeting}</p>
 <p>Welcome to FER! Please complete your onboarding using the secure link below:</p>
-<p><a href="${url}">${url}</a></p>
+${emailButton(url, "Complete Onboarding")}
 <p>You'll be asked for your personal details and to upload a few documents. The link is unique to you — please don't share it.</p>`,
   });
 

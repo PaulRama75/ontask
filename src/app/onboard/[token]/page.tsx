@@ -22,7 +22,7 @@ export default async function OnboardPage({
   const existingDocCategories = [...new Set(e.documents.map((d) => d.category))];
 
   return (
-    <main className="min-h-screen bg-slate-950 py-10">
+    <main className="min-h-screen py-10">
       <div className="mx-auto max-w-3xl px-4">
         <header className="mb-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-cyan-400">

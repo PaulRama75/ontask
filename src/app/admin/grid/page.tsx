@@ -181,7 +181,7 @@ export default async function GridPage({
   const td = "border border-white/10 px-2 py-1.5 align-top text-slate-200";
 
   return (
-    <main className="min-h-screen bg-slate-950 py-8">
+    <main className="min-h-screen py-8">
       <div className="mx-auto max-w-[1400px] px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>

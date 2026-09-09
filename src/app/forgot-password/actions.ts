@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, emailButton } from "@/lib/email";
 import { nanoid } from "nanoid";
 
 export type ForgotPasswordResult = { ok: true } | { ok: false; error: string };
@@ -34,7 +34,7 @@ export async function requestPasswordReset(
       subject: "Reset your FER password",
       html: `<p>${greeting}</p>
 <p>Someone requested a password reset for your FER account. If this was you, set a new password here:</p>
-<p><a href="${url}">${url}</a></p>
+${emailButton(url, "Reset Password")}
 <p>This link expires in ${RESET_TOKEN_HOURS} hour. If you didn't request this, you can ignore this email.</p>`,
     });
   }
