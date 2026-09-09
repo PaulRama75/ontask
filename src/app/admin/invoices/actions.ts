@@ -426,6 +426,42 @@ ${rows}
   }
 }
 
+// Manually re-sends the same notification that fires automatically on
+// submit/approve, for nudging the next reviewer without changing status.
+export async function notifyNextRole(form: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+
+  if (invoice.status === "SUBMITTED") {
+    if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+    const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
+    for (const am of ams) {
+      await sendEmail({
+        to: am.email,
+        subject: `Reminder: invoice ready for review — ${invoice.site}`,
+        html: `<p>Reminder: an invoice for ${escapeHtml(invoice.site)} is still waiting for your review.</p>`,
+      });
+    }
+  } else if (invoice.status === "AM_APPROVED") {
+    if (me.role !== "ACCOUNT_MANAGER" && !isAdminRole(me.role)) throw new Error("Not authorized");
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
+    });
+    for (const admin of admins) {
+      await sendEmail({
+        to: admin.email,
+        subject: `Reminder: invoice ready for final approval — ${invoice.site}`,
+        html: `<p>Reminder: an invoice for ${escapeHtml(invoice.site)} is still waiting for your final sign-off.</p>`,
+      });
+    }
+  } else {
+    throw new Error("No next reviewer to notify at this invoice's current status.");
+  }
+}
+
 export async function archiveInvoice(form: FormData): Promise<void> {
   const me = await getCurrentUser();
   if (!me) throw new Error("Not authenticated");
