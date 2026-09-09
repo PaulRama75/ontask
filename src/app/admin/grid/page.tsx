@@ -190,9 +190,19 @@ export default async function GridPage({
               All employees with document attachments and approval status.
             </p>
           </div>
-          <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
-            ← Admin home
-          </Link>
+          <div className="flex items-center gap-4">
+            {canLibrary && (
+              <a
+                href="/api/documents-export"
+                className="text-sm text-cyan-400 hover:underline"
+              >
+                Download all documents
+              </a>
+            )}
+            <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
+              ← Admin home
+            </Link>
+          </div>
         </div>
 
         <GridControls
