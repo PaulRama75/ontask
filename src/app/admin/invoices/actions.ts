@@ -197,6 +197,7 @@ type ExportEmployee = {
   frcSize: string | null;
   creditCardApproved: boolean | null;
   emailNeeded: boolean | null;
+  employmentType: string | null;
   approved: boolean;
 };
 
@@ -238,6 +239,12 @@ function employeeFieldValue(e: ExportEmployee, key: string): string {
       return e.creditCardApproved == null ? "" : e.creditCardApproved ? "Yes" : "No";
     case "emailNeeded":
       return e.emailNeeded == null ? "" : e.emailNeeded ? "Yes" : "No";
+    case "benefits":
+      return e.employmentType == null
+        ? ""
+        : e.employmentType.split(",").map((s) => s.trim()).includes("Benefits")
+          ? "Yes"
+          : "No";
     case "approved":
       return e.approved ? "Yes" : "No";
     default:

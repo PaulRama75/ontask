@@ -53,6 +53,9 @@ export const COLUMNS = [
   { key: "frc", label: "FRC" },
   { key: "creditCard", label: "Credit Card" },
   { key: "emailNeeded", label: "Email Needed" },
+  // Read-only on the grid — derived from the "Benefits" option inside the
+  // Employment Type field on the employee library page, not its own value.
+  { key: "benefits", label: "Benefits" },
   { key: "approved", label: "Approved" },
   { key: "archived", label: "Archived" },
   // Not a grid column: gates who can open an employee's document library page

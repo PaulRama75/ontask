@@ -41,6 +41,16 @@ function yesNo(v: boolean | null) {
   return v == null ? "—" : v ? "Yes" : "No";
 }
 
+// Derived from the "Benefits" option inside the Employment Type field — not
+// its own stored value, so this is display-only on the grid.
+function hasBenefits(employmentType: string | null): boolean | null {
+  if (!employmentType) return null;
+  return employmentType
+    .split(",")
+    .map((s) => s.trim())
+    .includes("Benefits");
+}
+
 // Renders attachment hyperlinks for a given document category. Prefers the
 // document's title (Document.label, e.g. a certification name) as the link
 // text so the user can tell which file is which without opening it.
@@ -169,6 +179,7 @@ export default async function GridPage({
     "frc",
     "creditCard",
     "emailNeeded",
+    "benefits",
     "approved",
     "archived",
   ];
@@ -235,6 +246,7 @@ export default async function GridPage({
                 {show("frc") && <th className={th}>FRC</th>}
                 {show("creditCard") && <th className={th}>Credit Card</th>}
                 {show("emailNeeded") && <th className={th}>Email Needed</th>}
+                {show("benefits") && <th className={th}>Benefits</th>}
                 {show("approved") && <th className={th}>Approved</th>}
                 {show("archived") && <th className={th}>Archived</th>}
               </tr>
@@ -503,6 +515,11 @@ export default async function GridPage({
                         ) : (
                           <span>{yesNo(e.emailNeeded)}</span>
                         )}
+                      </td>
+                    )}
+                    {show("benefits") && (
+                      <td className={`${td} whitespace-nowrap text-center`}>
+                        <span>{yesNo(hasBenefits(e.employmentType))}</span>
                       </td>
                     )}
                     {show("approved") && (
