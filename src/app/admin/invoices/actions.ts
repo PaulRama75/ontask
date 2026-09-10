@@ -8,9 +8,15 @@ import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+// Roles that create/edit invoices (Project Lead has the same invoice
+// capabilities as Project Manager, scoped to their own invoices).
+function isInvoiceCreatorRole(role: string): boolean {
+  return role === "PROJECT_MANAGER" || role === "PROJECT_LEAD" || isAdminRole(role);
+}
+
 async function requirePM() {
   const me = await getCurrentUser();
-  if (!me || (me.role !== "PROJECT_MANAGER" && !isAdminRole(me.role))) throw new Error("Not authorized");
+  if (!me || !isInvoiceCreatorRole(me.role)) throw new Error("Not authorized");
   return me;
 }
 
@@ -26,10 +32,10 @@ async function requireAdminUser() {
   return me;
 }
 
-// Same ownership rule used throughout this file: the PM who created the
+// Same ownership rule used throughout this file: the PM/PL who created the
 // invoice, or any admin (admins can manage every invoice, not just their own).
 function isInvoiceOwner(me: { id: string; role: string }, invoice: { createdByUserId: string }) {
-  return isAdminRole(me.role) || (me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id);
+  return isAdminRole(me.role) || (isInvoiceCreatorRole(me.role) && invoice.createdByUserId === me.id);
 }
 
 // Fallback client display name derived from their email when none is given,

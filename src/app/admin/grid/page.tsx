@@ -10,6 +10,7 @@ import {
   isAdminRole,
   getNavAccess,
   firstAllowedNavHref,
+  getRestrictedSites,
 } from "@/lib/rbac";
 import { setApproved, setActive, setArchived } from "../actions";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
@@ -102,14 +103,7 @@ export default async function GridPage({
   const showArchived = archivedParam === "1";
 
   // Site-level (row) access: a non-admin with assigned sites only sees those.
-  let restrictedSites: Set<string> | null = null;
-  if (!isAdminRole(me.role)) {
-    const mine = await prisma.userSite.findMany({
-      where: { userId: me.id },
-      select: { site: true },
-    });
-    if (mine.length > 0) restrictedSites = new Set(mine.map((s) => s.site));
-  }
+  const restrictedSites = isAdminRole(me.role) ? null : await getRestrictedSites(me.id);
 
   const all = await prisma.employee.findMany({
     orderBy: { createdAt: "desc" },

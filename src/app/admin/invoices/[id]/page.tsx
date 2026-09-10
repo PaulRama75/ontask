@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
 import { STATUS_LABEL } from "../statusLabels";
 import AttachmentUploadForm from "../AttachmentUploadForm";
 import DownloadAllButton from "../DownloadAllButton";
@@ -47,14 +47,22 @@ export default async function InvoiceDetailPage({
 
   const isAM = me.role === "ACCOUNT_MANAGER";
   const isAdmin = isAdminRole(me.role);
-  // Owner = whoever may edit this DRAFT: the PM who created it, or ANY admin
-  // (admins can fully manage every invoice, same as they bypass restrictions
-  // everywhere else in this app — not just the ones they personally created).
-  const isOwner = isAdmin || (me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id);
+  const isPMorPL = me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD";
+  // Owner = whoever may edit this DRAFT: the PM/PL who created it, or ANY
+  // admin (admins can fully manage every invoice, same as they bypass
+  // restrictions everywhere else in this app — not just ones they created).
+  const isOwner = isAdmin || (isPMorPL && invoice.createdByUserId === me.id);
+  // PMs/PLs can also view (not necessarily edit) every invoice for a site
+  // they've been granted under Site Access, not just ones they created.
+  let canViewBySite = false;
+  if (isPMorPL && !isOwner) {
+    const restrictedSites = await getRestrictedSites(me.id);
+    canViewBySite = !restrictedSites || restrictedSites.has(invoice.site);
+  }
   // AMs only ever act on SUBMITTED/AM_APPROVED invoices (see the Actions
   // section below) — viewing a DRAFT serves no purpose and would let an AM
   // see a PM's in-progress invoice by guessing/sharing its URL before it's ready.
-  const canView = isOwner || (isAM && invoice.status !== "DRAFT");
+  const canView = isOwner || canViewBySite || (isAM && invoice.status !== "DRAFT");
   if (!canView) redirect("/admin/invoices");
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwner;

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
 import { STATUS_LABEL, STATUS_STYLE } from "./statusLabels";
 import InvoiceControls from "./InvoiceControls";
 
@@ -37,12 +37,18 @@ export default async function InvoicesPage({
   const dir: "asc" | "desc" = dirParam === "asc" ? "asc" : "desc";
   const showArchived = archivedParam === "1";
 
-  const where =
-    me.role === "PROJECT_MANAGER"
-      ? { createdByUserId: me.id }
-      : me.role === "ACCOUNT_MANAGER"
-        ? { status: { not: "DRAFT" } }
-        : {};
+  // Project Managers and Project Leads see every invoice for the site(s)
+  // they've been granted under Site Access (not just ones they created) --
+  // no rows there means unrestricted, same convention as the data grid.
+  const isPMorPL = me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD";
+  const restrictedSites = isPMorPL ? await getRestrictedSites(me.id) : null;
+  const where = isPMorPL
+    ? restrictedSites
+      ? { site: { in: [...restrictedSites] } }
+      : {}
+    : me.role === "ACCOUNT_MANAGER"
+      ? { status: { not: "DRAFT" } }
+      : {};
 
   const all = await prisma.invoice.findMany({
     where,
@@ -118,12 +124,12 @@ export default async function InvoicesPage({
           <div>
             <h1 className="text-2xl font-bold text-white">Invoices</h1>
             <p className="text-sm text-slate-400">
-              {me.role === "PROJECT_MANAGER"
-                ? "Invoices you've created."
+              {isPMorPL
+                ? "Invoices for your assigned site(s)."
                 : "Invoices awaiting or past your review."}
             </p>
           </div>
-          {(me.role === "PROJECT_MANAGER" || isAdminRole(me.role)) && (
+          {(isPMorPL || isAdminRole(me.role)) && (
             <Link
               href="/admin/invoices/new"
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"

@@ -33,6 +33,14 @@ export function isAdminRole(role: string): boolean {
   return ADMIN_ROLES.includes(role as Role);
 }
 
+// Sites a user is restricted to, based on their Site Access grants. Null
+// means unrestricted (no rows = sees everything) -- the convention used
+// everywhere Site Access applies (the data grid, and invoices).
+export async function getRestrictedSites(userId: string): Promise<Set<string> | null> {
+  const rows = await prisma.userSite.findMany({ where: { userId }, select: { site: true } });
+  return rows.length > 0 ? new Set(rows.map((r) => r.site)) : null;
+}
+
 // Logical columns shown in the data grid. These keys drive access control.
 export const COLUMNS = [
   { key: "name", label: "Employee" },
@@ -183,7 +191,10 @@ export function defaultNavVisible(role: Role, navKey: NavKey): boolean {
       return true;
     case "invoices":
       return (
-        role === "PROJECT_MANAGER" || role === "ACCOUNT_MANAGER" || isAdminRole(role)
+        role === "PROJECT_MANAGER" ||
+        role === "PROJECT_LEAD" ||
+        role === "ACCOUNT_MANAGER" ||
+        isAdminRole(role)
       );
     default:
       return false;

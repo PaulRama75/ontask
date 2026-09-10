@@ -10,7 +10,9 @@ export default async function NewInvoicePage() {
   if (!me) redirect("/login");
   const nav = await getNavAccess(me.role);
   if (!nav.invoices) redirect(firstAllowedNavHref(nav));
-  if (me.role !== "PROJECT_MANAGER" && !isAdminRole(me.role)) redirect("/admin/invoices");
+  if (me.role !== "PROJECT_MANAGER" && me.role !== "PROJECT_LEAD" && !isAdminRole(me.role)) {
+    redirect("/admin/invoices");
+  }
 
   return (
     <main className="min-h-screen py-8">
