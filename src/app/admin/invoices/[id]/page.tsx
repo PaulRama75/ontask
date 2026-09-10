@@ -85,18 +85,33 @@ export default async function InvoiceDetailPage({
     <main className="min-h-screen py-8">
       <div className="mx-auto max-w-3xl px-4">
         <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">{invoice.site}</h1>
-            <p className="text-sm text-slate-400">
-              {invoice.client.name} ·{" "}
-              <a href={`mailto:${invoice.client.email}`} className="text-cyan-400 hover:underline">
-                {invoice.client.email}
-              </a>
-            </p>
-          </div>
+          <h1 className="text-2xl font-bold text-white">{invoice.site}</h1>
           <Link href="/admin/invoices" className="text-sm text-cyan-400 hover:underline">
             ← All invoices
           </Link>
+        </div>
+
+        <div className="mb-4 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className="px-4 py-2">Site</th>
+                <th className="px-4 py-2">Email</th>
+                <th className="px-4 py-2">Job No#</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-4 py-2 text-slate-200">{invoice.site}</td>
+                <td className="px-4 py-2">
+                  <a href={`mailto:${invoice.client.email}`} className="text-cyan-400 hover:underline">
+                    {invoice.client.email}
+                  </a>
+                </td>
+                <td className="px-4 py-2 text-slate-200">{invoice.jobNumber || "—"}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <span className="inline-block rounded-md bg-white/5 px-3 py-1 text-sm font-semibold text-slate-300">

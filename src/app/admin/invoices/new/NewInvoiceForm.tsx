@@ -23,19 +23,18 @@ export default function NewInvoiceForm() {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300">Client name</label>
-        <input
-          name="clientName"
-          required
-          className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
-        />
-      </div>
-      <div>
         <label className="block text-sm font-medium text-slate-300">Client email</label>
         <input
           name="clientEmail"
           type="email"
           required
+          className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-300">FER Job No#</label>
+        <input
+          name="jobNumber"
           className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
         />
       </div>

@@ -32,6 +32,15 @@ function isInvoiceOwner(me: { id: string; role: string }, invoice: { createdByUs
   return isAdminRole(me.role) || (me.role === "PROJECT_MANAGER" && invoice.createdByUserId === me.id);
 }
 
+// Fallback client display name derived from their email when none is given,
+// e.g. "billing@acme-corp.com" -> "Billing Acme Corp".
+function deriveClientName(email: string): string {
+  const local = email.split("@")[0] || email;
+  const words = local.split(/[._\-+]+/).filter(Boolean);
+  const name = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return name || email;
+}
+
 // Escapes user-controlled text before interpolating into notification/invoice HTML emails.
 function escapeHtml(text: string): string {
   return text
@@ -50,22 +59,20 @@ export async function createInvoice(
   const me = await requirePM();
 
   const site = String(form.get("site") ?? "").trim();
-  const clientName = String(form.get("clientName") ?? "").trim();
   const clientEmail = String(form.get("clientEmail") ?? "").trim().toLowerCase();
+  const jobNumber = String(form.get("jobNumber") ?? "").trim() || null;
 
   if (!site) return { ok: false, error: "Site is required." };
-  if (!clientName || !clientEmail) {
-    return { ok: false, error: "Client name and email are required." };
-  }
+  if (!clientEmail) return { ok: false, error: "Client email is required." };
 
   const client = await prisma.client.upsert({
     where: { email_site: { email: clientEmail, site } },
     update: {},
-    create: { name: clientName, email: clientEmail, site },
+    create: { name: deriveClientName(clientEmail), email: clientEmail, site },
   });
 
   const invoice = await prisma.invoice.create({
-    data: { clientId: client.id, site, status: "DRAFT", createdByUserId: me.id },
+    data: { clientId: client.id, site, jobNumber, status: "DRAFT", createdByUserId: me.id },
   });
 
   revalidatePath("/admin/invoices");
