@@ -8,11 +8,23 @@ import InvoiceControls from "./InvoiceControls";
 
 export const dynamic = "force-dynamic";
 
-const SORT_KEYS = ["site", "client", "total", "status", "createdAt"] as const;
+const SORT_KEYS = ["site", "client", "jobNumber", "total", "status", "createdAt", "updatedAt"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 
 function isSortKey(v: string): v is SortKey {
   return (SORT_KEYS as readonly string[]).includes(v);
+}
+
+// Date-only display makes same-day invoices look identical and their sort
+// order look broken -- show the time too so ordering is visibly correct.
+function formatDateTime(d: Date): string {
+  return d.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export default async function InvoicesPage({
@@ -78,10 +90,14 @@ export default async function InvoicesPage({
         return sign * a.site.localeCompare(b.site);
       case "client":
         return sign * a.client.name.localeCompare(b.client.name);
+      case "jobNumber":
+        return sign * (a.jobNumber ?? "").localeCompare(b.jobNumber ?? "");
       case "total":
         return sign * (a.total - b.total);
       case "status":
         return sign * a.status.localeCompare(b.status);
+      case "updatedAt":
+        return sign * (a.updatedAt.getTime() - b.updatedAt.getTime());
       case "createdAt":
       default:
         return sign * (a.createdAt.getTime() - b.createdAt.getTime());
@@ -153,15 +169,18 @@ export default async function InvoicesPage({
               <tr>
                 <SortHeader sortKey="site" label="Site" />
                 <SortHeader sortKey="client" label="Client" />
+                <SortHeader sortKey="jobNumber" label="Job No#" />
                 <SortHeader sortKey="total" label="Total" />
                 <SortHeader sortKey="status" label="Status" />
                 <SortHeader sortKey="createdAt" label="Created" />
+                <th className={th}>Modified by</th>
+                <SortHeader sortKey="updatedAt" label="Modified" />
               </tr>
             </thead>
             <tbody>
               {invoices.length === 0 && (
                 <tr>
-                  <td className={`${td} text-center text-slate-500`} colSpan={5}>
+                  <td className={`${td} text-center text-slate-500`} colSpan={7}>
                     {all.length === 0 ? "No invoices yet." : "No invoices match your search/filter."}
                   </td>
                 </tr>
@@ -176,6 +195,7 @@ export default async function InvoicesPage({
                       </Link>
                     </td>
                     <td className={td}>{inv.client.name}</td>
+                    <td className={td}>{inv.jobNumber || "—"}</td>
                     <td className={td}>${total.toFixed(2)}</td>
                     <td className={td}>
                       <span className={`rounded-md px-2 py-1 text-xs font-semibold ${STATUS_STYLE[inv.status]}`}>
@@ -187,7 +207,9 @@ export default async function InvoicesPage({
                         </span>
                       )}
                     </td>
-                    <td className={`${td} whitespace-nowrap`}>{inv.createdAt.toISOString().slice(0, 10)}</td>
+                    <td className={`${td} whitespace-nowrap`}>{formatDateTime(inv.createdAt)}</td>
+                    <td className={td}>{inv.lastModifiedByName || "—"}</td>
+                    <td className={`${td} whitespace-nowrap`}>{formatDateTime(inv.updatedAt)}</td>
                   </tr>
                 );
               })}

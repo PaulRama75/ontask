@@ -77,6 +77,16 @@ async function getInvoiceAdminRecipients() {
   });
 }
 
+// Stamps who last touched an invoice (status change, line items, attachments,
+// client name) so the invoices list can show a "Modified by" column.
+// Denormalized name avoids a join, matching the InvoiceComment pattern.
+async function touchInvoice(id: string, me: { id: string; name: string | null; email: string }) {
+  await prisma.invoice.update({
+    where: { id },
+    data: { lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
+  });
+}
+
 // Escapes user-controlled text before interpolating into notification/invoice HTML emails.
 function escapeHtml(text: string): string {
   return text
@@ -109,7 +119,16 @@ export async function createInvoice(
   });
 
   const invoice = await prisma.invoice.create({
-    data: { clientId: client.id, site, jobNumber, poNumber, status: "DRAFT", createdByUserId: me.id },
+    data: {
+      clientId: client.id,
+      site,
+      jobNumber,
+      poNumber,
+      status: "DRAFT",
+      createdByUserId: me.id,
+      lastModifiedByUserId: me.id,
+      lastModifiedByName: me.name || me.email,
+    },
   });
 
   revalidatePath("/admin/invoices");
@@ -130,6 +149,7 @@ export async function updateClientName(form: FormData): Promise<void> {
   if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
 
   await prisma.client.update({ where: { id: invoice.clientId }, data: { name } });
+  await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
   revalidatePath("/admin/invoices");
 }
@@ -148,6 +168,7 @@ export async function addLineItem(form: FormData): Promise<void> {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive number.");
 
   await prisma.invoiceLineItem.create({ data: { invoiceId, description, amount } });
+  await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
@@ -163,6 +184,7 @@ export async function deleteLineItem(form: FormData): Promise<void> {
     throw new Error("Not authorized");
   if (lineItem.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
   await prisma.invoiceLineItem.delete({ where: { id } });
+  await touchInvoice(lineItem.invoiceId, me);
   revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
 }
 
@@ -208,6 +230,7 @@ export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
     },
   });
 
+  await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
@@ -223,6 +246,7 @@ export async function deleteInvoiceAttachment(form: FormData): Promise<void> {
     throw new Error("Not authorized");
   if (att.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
   await prisma.invoiceAttachment.delete({ where: { id } });
+  await touchInvoice(att.invoiceId, me);
   revalidatePath(`/admin/invoices/${att.invoiceId}`);
 }
 
@@ -352,6 +376,7 @@ export async function attachGridExport(form: FormData): Promise<void> {
     },
   });
 
+  await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
@@ -364,7 +389,10 @@ export async function submitInvoice(form: FormData): Promise<void> {
   if (invoice.status !== "DRAFT") throw new Error("Invoice already submitted.");
   if (invoice.lineItems.length === 0) throw new Error("Add at least one line item before submitting.");
 
-  await prisma.invoice.update({ where: { id }, data: { status: "SUBMITTED" } });
+  await prisma.invoice.update({
+    where: { id },
+    data: { status: "SUBMITTED", lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
+  });
 
   const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
   for (const am of ams) {
@@ -380,13 +408,21 @@ export async function submitInvoice(form: FormData): Promise<void> {
 }
 
 export async function approveInvoice(form: FormData): Promise<void> {
-  await requireAM();
+  const me = await requireAM();
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) throw new Error("Invoice not found");
   if (invoice.status !== "SUBMITTED") throw new Error("Invoice must be submitted before it can be approved.");
 
-  await prisma.invoice.update({ where: { id }, data: { status: "AM_APPROVED", rejectionReason: null } });
+  await prisma.invoice.update({
+    where: { id },
+    data: {
+      status: "AM_APPROVED",
+      rejectionReason: null,
+      lastModifiedByUserId: me.id,
+      lastModifiedByName: me.name || me.email,
+    },
+  });
 
   const admins = await getInvoiceAdminRecipients();
   for (const admin of admins) {
@@ -421,7 +457,13 @@ export async function rejectInvoice(form: FormData): Promise<void> {
 
   await prisma.invoice.update({
     where: { id },
-    data: { status: "DRAFT", rejectionReason: reason, rejectedByUserId: me.id },
+    data: {
+      status: "DRAFT",
+      rejectionReason: reason,
+      rejectedByUserId: me.id,
+      lastModifiedByUserId: me.id,
+      lastModifiedByName: me.name || me.email,
+    },
   });
 
   const creator = await prisma.user.findUnique({ where: { id: invoice.createdByUserId } });
@@ -440,7 +482,7 @@ export async function rejectInvoice(form: FormData): Promise<void> {
 // Admin's final approval, separate from actually sending the invoice.
 // Notifies Account Managers that it's approved and about to go out.
 export async function approveInvoiceFinal(form: FormData): Promise<void> {
-  await requireAdminUser();
+  const me = await requireAdminUser();
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) throw new Error("Invoice not found");
@@ -448,7 +490,10 @@ export async function approveInvoiceFinal(form: FormData): Promise<void> {
     throw new Error("Invoice must be Account-Manager approved before it can be approved.");
   }
 
-  await prisma.invoice.update({ where: { id }, data: { status: "ADMIN_APPROVED" } });
+  await prisma.invoice.update({
+    where: { id },
+    data: { status: "ADMIN_APPROVED", lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
+  });
 
   const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
   for (const am of ams) {
@@ -467,7 +512,7 @@ export async function approveInvoiceFinal(form: FormData): Promise<void> {
 // AM_APPROVED (skipping a separate approve step) or from ADMIN_APPROVED
 // after the admin already approved it -- either way it counts as approval.
 export async function sendInvoiceToClient(form: FormData): Promise<void> {
-  await requireAdminUser();
+  const me = await requireAdminUser();
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -481,6 +526,7 @@ export async function sendInvoiceToClient(form: FormData): Promise<void> {
   if (invoice.status === "AM_APPROVED") {
     await prisma.invoice.update({ where: { id }, data: { status: "ADMIN_APPROVED" } });
   }
+  await touchInvoice(id, me);
 
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
   const rows = invoice.lineItems
@@ -573,7 +619,10 @@ export async function archiveInvoice(form: FormData): Promise<void> {
   if (!invoice) throw new Error("Invoice not found");
   if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
 
-  await prisma.invoice.update({ where: { id }, data: { archived: true } });
+  await prisma.invoice.update({
+    where: { id },
+    data: { archived: true, lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
+  });
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
 }
@@ -586,7 +635,10 @@ export async function unarchiveInvoice(form: FormData): Promise<void> {
   if (!invoice) throw new Error("Invoice not found");
   if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
 
-  await prisma.invoice.update({ where: { id }, data: { archived: false } });
+  await prisma.invoice.update({
+    where: { id },
+    data: { archived: false, lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
+  });
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
 }

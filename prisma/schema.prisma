@@ -233,6 +233,11 @@ model Invoice {
   updatedAt        DateTime  @updatedAt
   sentAt           DateTime?
 
+  // Denormalized (like InvoiceComment.authorName) so the invoices list can
+  // show who last touched it without joining to User.
+  lastModifiedByUserId String?
+  lastModifiedByName   String?
+
   lineItems   InvoiceLineItem[]
   attachments InvoiceAttachment[]
   comments    InvoiceComment[]
