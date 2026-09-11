@@ -128,6 +128,11 @@ model User {
   sessions     Session[]
   sites        UserSite[]
   resetTokens  PasswordResetToken[]
+
+  // The single designated recipient for admin-facing invoice notifications
+  // (final-approval alerts, "Email Admins" nudges). At most one user should
+  // have this set true at a time -- enforced in the server action, not the DB.
+  receivesInvoiceAdminEmails Boolean @default(false)
 }
 
 // Site-level (row) access. A non-admin user with one or more UserSite rows is

@@ -68,3 +68,31 @@ export async function setUserActive(form: FormData): Promise<void> {
   await prisma.user.update({ where: { id }, data: { active } });
   revalidatePath("/admin/users");
 }
+
+// Designates the single recipient for admin-facing invoice notifications
+// (final-approval alerts, "Email Admins" nudges). Clears the flag on
+// everyone else first so only one user ever has it set.
+export async function setInvoiceAdminRecipient(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(form.get("userId") ?? "");
+  if (!id) return;
+  await prisma.$transaction([
+    prisma.user.updateMany({
+      where: { receivesInvoiceAdminEmails: true },
+      data: { receivesInvoiceAdminEmails: false },
+    }),
+    prisma.user.update({ where: { id }, data: { receivesInvoiceAdminEmails: true } }),
+  ]);
+  revalidatePath("/admin/users");
+}
+
+// Clears the designated recipient entirely, reverting invoice admin
+// notifications to every active ADMIN/SUPER_ADMIN.
+export async function clearInvoiceAdminRecipient(): Promise<void> {
+  await requireAdmin();
+  await prisma.user.updateMany({
+    where: { receivesInvoiceAdminEmails: true },
+    data: { receivesInvoiceAdminEmails: false },
+  });
+  revalidatePath("/admin/users");
+}

@@ -64,6 +64,19 @@ function deriveClientName(email: string): string {
   return name || email;
 }
 
+// Admin-facing invoice notifications (final-approval alerts, "Email Admins")
+// go to the one user designated via the Users page, or every active
+// ADMIN/SUPER_ADMIN if nobody has been designated yet.
+async function getInvoiceAdminRecipients() {
+  const designated = await prisma.user.findMany({
+    where: { receivesInvoiceAdminEmails: true, active: true },
+  });
+  if (designated.length > 0) return designated;
+  return prisma.user.findMany({
+    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
+  });
+}
+
 // Escapes user-controlled text before interpolating into notification/invoice HTML emails.
 function escapeHtml(text: string): string {
   return text
@@ -357,9 +370,7 @@ export async function approveInvoice(form: FormData): Promise<void> {
 
   await prisma.invoice.update({ where: { id }, data: { status: "AM_APPROVED", rejectionReason: null } });
 
-  const admins = await prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
-  });
+  const admins = await getInvoiceAdminRecipients();
   for (const admin of admins) {
     await sendEmail({
       to: admin.email,
@@ -485,9 +496,7 @@ export async function notifyNextRole(form: FormData): Promise<void> {
     }
   } else if (invoice.status === "AM_APPROVED") {
     if (me.role !== "ACCOUNT_MANAGER" && !isAdminRole(me.role)) throw new Error("Not authorized");
-    const admins = await prisma.user.findMany({
-      where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
-    });
+    const admins = await getInvoiceAdminRecipients();
     for (const admin of admins) {
       await sendEmail({
         to: admin.email,
