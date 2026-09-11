@@ -389,12 +389,12 @@ export default async function InvoiceDetailPage({
               </form>
             )}
 
-            {isAdmin && invoice.status === "ADMIN_APPROVED" && (
+            {isAdmin && (invoice.status === "AM_APPROVED" || invoice.status === "ADMIN_APPROVED") && (
               <form action={sendInvoiceToClient}>
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
                   type="submit"
-                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
                 >
                   Send
                 </button>

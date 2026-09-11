@@ -463,8 +463,9 @@ export async function approveInvoiceFinal(form: FormData): Promise<void> {
   revalidatePath("/admin/invoices");
 }
 
-// Sends the approved invoice to the client. Separate step from approval so
-// an admin can approve without immediately triggering the client email.
+// Sends the approved invoice to the client. Available directly from
+// AM_APPROVED (skipping a separate approve step) or from ADMIN_APPROVED
+// after the admin already approved it -- either way it counts as approval.
 export async function sendInvoiceToClient(form: FormData): Promise<void> {
   await requireAdminUser();
   const id = String(form.get("invoiceId") ?? "");
@@ -473,8 +474,12 @@ export async function sendInvoiceToClient(form: FormData): Promise<void> {
     include: { client: true, lineItems: true, attachments: true },
   });
   if (!invoice) throw new Error("Invoice not found");
-  if (invoice.status !== "ADMIN_APPROVED") {
-    throw new Error("Invoice must be approved before it can be sent to the client.");
+  if (invoice.status !== "AM_APPROVED" && invoice.status !== "ADMIN_APPROVED") {
+    throw new Error("Invoice must be Account-Manager approved before it can be sent.");
+  }
+
+  if (invoice.status === "AM_APPROVED") {
+    await prisma.invoice.update({ where: { id }, data: { status: "ADMIN_APPROVED" } });
   }
 
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
@@ -507,6 +512,15 @@ ${rows}
 
   if (sent) {
     await prisma.invoice.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
+
+    const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
+    for (const am of ams) {
+      await sendEmail({
+        to: am.email,
+        subject: `Invoice sent to client — ${invoice.site}`,
+        html: `<p>The invoice for ${escapeHtml(invoice.site)} has been sent to the client.</p>`,
+      });
+    }
   }
 
   revalidatePath(`/admin/invoices/${id}`);
