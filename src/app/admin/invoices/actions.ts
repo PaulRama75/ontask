@@ -32,6 +32,14 @@ async function requireAdminUser() {
   return me;
 }
 
+// Permanently deleting an invoice is restricted to Super Admin -- a tier
+// above the regular Admin actions (approve/send/reject) in this file.
+async function requireSuperAdminUser() {
+  const me = await getCurrentUser();
+  if (!me || me.role !== "SUPER_ADMIN") throw new Error("Not authorized");
+  return me;
+}
+
 // Same ownership rule used throughout this file: the PM/PL who created the
 // invoice, or any admin (admins can manage every invoice, not just their own).
 function isInvoiceOwner(me: { id: string; role: string }, invoice: { createdByUserId: string }) {
@@ -641,6 +649,19 @@ export async function unarchiveInvoice(form: FormData): Promise<void> {
   });
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+}
+
+// Permanently deletes an invoice and its line items/attachments/comments
+// (cascade). Only Super Admin can do this -- everyone else can Archive.
+export async function deleteInvoice(form: FormData): Promise<void> {
+  await requireSuperAdminUser();
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+
+  await prisma.invoice.delete({ where: { id } });
+  revalidatePath("/admin/invoices");
+  redirect("/admin/invoices");
 }
 
 export async function addInvoiceComment(form: FormData): Promise<void> {

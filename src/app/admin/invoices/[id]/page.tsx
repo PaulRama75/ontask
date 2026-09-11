@@ -22,7 +22,9 @@ import {
   notifyNextRole,
   addInvoiceComment,
   updateClientName,
+  deleteInvoice,
 } from "../actions";
+import ConfirmSubmitButton from "../../ConfirmSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -453,6 +455,18 @@ export default async function InvoiceDetailPage({
                 >
                   {invoice.archived ? "Unarchive" : "Archive"}
                 </button>
+              </form>
+            )}
+
+            {me.role === "SUPER_ADMIN" && (
+              <form action={deleteInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <ConfirmSubmitButton
+                  confirmMessage={`Permanently delete the invoice for ${invoice.site}? This can't be undone.`}
+                  className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+                >
+                  Delete
+                </ConfirmSubmitButton>
               </form>
             )}
           </div>
