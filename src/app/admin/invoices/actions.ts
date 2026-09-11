@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, getAccessMap, canView, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
+import { isAdminRole, getAccessMap, canView, getRestrictedSites, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
 import { saveInvoiceFile, getFile } from "@/lib/storage";
 import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
@@ -38,6 +38,23 @@ function isInvoiceOwner(me: { id: string; role: string }, invoice: { createdByUs
   return isAdminRole(me.role) || (isInvoiceCreatorRole(me.role) && invoice.createdByUserId === me.id);
 }
 
+// Mirrors the view-access rule on the invoice detail page: the owner, any
+// PM/PL with Site Access to this invoice's site, or an AM once it's no
+// longer a DRAFT.
+async function canViewInvoice(
+  me: { id: string; role: string },
+  invoice: { site: string; status: string; createdByUserId: string },
+): Promise<boolean> {
+  if (isInvoiceOwner(me, invoice)) return true;
+  const isPMorPL = me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD";
+  if (isPMorPL) {
+    const restrictedSites = await getRestrictedSites(me.id);
+    if (!restrictedSites || restrictedSites.has(invoice.site)) return true;
+  }
+  if (me.role === "ACCOUNT_MANAGER" && invoice.status !== "DRAFT") return true;
+  return false;
+}
+
 // Fallback client display name derived from their email when none is given,
 // e.g. "billing@acme-corp.com" -> "Billing Acme Corp".
 function deriveClientName(email: string): string {
@@ -67,6 +84,7 @@ export async function createInvoice(
   const site = String(form.get("site") ?? "").trim();
   const clientEmail = String(form.get("clientEmail") ?? "").trim().toLowerCase();
   const jobNumber = String(form.get("jobNumber") ?? "").trim() || null;
+  const poNumber = String(form.get("poNumber") ?? "").trim() || null;
 
   if (!site) return { ok: false, error: "Site is required." };
   if (!clientEmail) return { ok: false, error: "Client email is required." };
@@ -78,7 +96,7 @@ export async function createInvoice(
   });
 
   const invoice = await prisma.invoice.create({
-    data: { clientId: client.id, site, jobNumber, status: "DRAFT", createdByUserId: me.id },
+    data: { clientId: client.id, site, jobNumber, poNumber, status: "DRAFT", createdByUserId: me.id },
   });
 
   revalidatePath("/admin/invoices");
@@ -506,6 +524,29 @@ export async function unarchiveInvoice(form: FormData): Promise<void> {
   await prisma.invoice.update({ where: { id }, data: { archived: false } });
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+}
+
+export async function addInvoiceComment(form: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
+  const invoiceId = String(form.get("invoiceId") ?? "");
+  const message = String(form.get("message") ?? "").trim();
+  if (!message) throw new Error("A comment is required.");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!(await canViewInvoice(me, invoice))) throw new Error("Not authorized");
+
+  await prisma.invoiceComment.create({
+    data: {
+      invoiceId,
+      authorUserId: me.id,
+      authorName: me.name || me.email,
+      message,
+    },
+  });
+
+  revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
 // Lets the invoice owner send a one-off email reply to whoever rejected it

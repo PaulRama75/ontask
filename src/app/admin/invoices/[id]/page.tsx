@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
-import { STATUS_LABEL } from "../statusLabels";
 import AttachmentUploadForm from "../AttachmentUploadForm";
 import DownloadAllButton from "../DownloadAllButton";
 import {
@@ -20,6 +19,7 @@ import {
   unarchiveInvoice,
   replyToRejection,
   notifyNextRole,
+  addInvoiceComment,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +41,7 @@ export default async function InvoiceDetailPage({
       client: true,
       lineItems: { orderBy: { createdAt: "asc" } },
       attachments: { orderBy: { createdAt: "asc" } },
+      comments: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!invoice) notFound();
@@ -104,29 +105,30 @@ export default async function InvoiceDetailPage({
             <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-4 py-2">Site</th>
+                <th className="px-4 py-2">Client</th>
                 <th className="px-4 py-2">Email</th>
                 <th className="px-4 py-2">Job No#</th>
+                <th className="px-4 py-2">PO#</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td className="px-4 py-2 text-slate-200">{invoice.site}</td>
+                <td className="px-4 py-2 text-slate-200">{invoice.client.name}</td>
                 <td className="px-4 py-2">
                   <a href={`mailto:${invoice.client.email}`} className="text-cyan-400 hover:underline">
                     {invoice.client.email}
                   </a>
                 </td>
                 <td className="px-4 py-2 text-slate-200">{invoice.jobNumber || "—"}</td>
+                <td className="px-4 py-2 text-slate-200">{invoice.poNumber || "—"}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <span className="inline-block rounded-md bg-white/5 px-3 py-1 text-sm font-semibold text-slate-300">
-          {STATUS_LABEL[invoice.status] ?? invoice.status}
-        </span>
         {invoice.archived && (
-          <span className="ml-2 inline-block rounded-md bg-amber-500/15 px-3 py-1 text-sm font-semibold text-amber-300">
+          <span className="inline-block rounded-md bg-amber-500/15 px-3 py-1 text-sm font-semibold text-amber-300">
             Archived
           </span>
         )}
@@ -284,6 +286,46 @@ export default async function InvoiceDetailPage({
               </button>
             </form>
           )}
+        </section>
+
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-lg font-semibold text-white">Comments</h2>
+          <ul className="mt-3 space-y-3 text-sm">
+            {invoice.comments.length === 0 && <li className="text-slate-500">No comments yet.</li>}
+            {invoice.comments.map((c) => (
+              <li key={c.id} className="rounded-md border border-white/10 bg-slate-800/40 p-3">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-medium text-slate-300">{c.authorName}</span>
+                  <span>
+                    {c.createdAt.toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-slate-200">{c.message}</p>
+              </li>
+            ))}
+          </ul>
+
+          <form action={addInvoiceComment} className="mt-4 flex items-start gap-2">
+            <input type="hidden" name="invoiceId" value={invoice.id} />
+            <textarea
+              name="message"
+              rows={2}
+              required
+              placeholder="Add a comment…"
+              className="flex-1 resize-y rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+            >
+              Post
+            </button>
+          </form>
         </section>
 
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">

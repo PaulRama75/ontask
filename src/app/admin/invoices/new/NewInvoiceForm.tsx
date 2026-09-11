@@ -38,6 +38,13 @@ export default function NewInvoiceForm() {
           className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
         />
       </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-300">PO#</label>
+        <input
+          name="poNumber"
+          className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+        />
+      </div>
       {state?.ok === false && (
         <p className="rounded-md border border-rose-500/30 bg-rose-500/10 p-2 text-sm text-rose-300">
           {state.error}

@@ -25,7 +25,7 @@ model Employee {
   phone     String?
 
   // Sensitive — stored encrypted-at-rest target later; plain for Phase 1 dev
-  ssn       String? // Social Security Number
+  ssn String? // Social Security Number
 
   // Address
   addressLine1 String?
@@ -36,48 +36,48 @@ model Employee {
 
   // Compliance fields
   driversLicenseNumber String?
-  safetyCouncilId      String?   // Safety Council ID / card number
+  safetyCouncilId      String? // Safety Council ID / card number
   safetyCouncilExpiry  DateTime?
-  twicNumber           String?   // TWIC card number
+  twicNumber           String? // TWIC card number
   twicExpiry           DateTime?
 
   // Project Lead managed fields
-  site       String?  // job site / location
-  active     Boolean  @default(true)
-  archived   Boolean  @default(false) // hidden from the grid by default once set
+  site     String? // job site / location
+  active   Boolean @default(true)
+  archived Boolean @default(false) // hidden from the grid by default once set
 
   // Project Lead assigned at onboarding-link creation; notified on completion.
   projectLeadEmail String?
 
   // Rate info (set by Project Lead in Phase 3; placeholder now)
-  payRate    Float?
-  billRate   Float?
+  payRate  Float?
+  billRate Float?
 
   // Project Lead post-onboarding details. Booleans are nullable = "not set yet".
   hireDate           DateTime?
-  frcNeeded          Boolean?  // does the employee need FRC?
-  frcSize            String?   // FRC size when needed
-  creditCardApproved Boolean?  // company credit card approved?
-  emailNeeded        Boolean?  // does the employee need a company email?
+  frcNeeded          Boolean? // does the employee need FRC?
+  frcSize            String? // FRC size when needed
+  creditCardApproved Boolean? // company credit card approved?
+  emailNeeded        Boolean? // does the employee need a company email?
 
   // Project Lead job assignment details
-  urgency                    String?   // URGENT | NON_URGENT
-  employmentType             String?   // comma-separated: Full Time, Part Time, 1099 Employee, Benefits, No Benefits
-  positionType               String?   // comma-separated: Administrative, Field Personnel, Supervision, Management
+  urgency                    String? // URGENT | NON_URGENT
+  employmentType             String? // comma-separated: Full Time, Part Time, 1099 Employee, Benefits, No Benefits
+  positionType               String? // comma-separated: Administrative, Field Personnel, Supervision, Management
   directSupervisor           String?
   jobNumber                  String?
-  jobSite                    String?   // specific job/project site, distinct from the general "site" field above
+  jobSite                    String? // specific job/project site, distinct from the general "site" field above
   drivingRecordRequired      Boolean?
   liftOperatorCertifications String?
   siteSpecificsNeeded        Boolean?
-  fitTestNeeded               Boolean?
+  fitTestNeeded              Boolean?
   additionalTrainingsNeeded  String?
-  safetyEquipmentNeeded      String?   // comma-separated: N/A, H2S monitor, Four Gas, Harness, Lanyard, Hard Hat, Safety glasses, Gloves, Goggles
+  safetyEquipmentNeeded      String? // comma-separated: N/A, H2S monitor, Four Gas, Harness, Lanyard, Hard Hat, Safety glasses, Gloves, Goggles
   additionalEquipmentNeeds   String?
 
   // Onboarding lifecycle: DRAFT, SUBMITTED, HR_REVIEW, RATES_ASSIGNED, APPROVED
-  status     String   @default("DRAFT")
-  source     String   @default("LINK") // LINK or EXCEL
+  status String @default("DRAFT")
+  source String @default("LINK") // LINK or EXCEL
 
   // Overall approval (per-column approval workflow comes in Phase 3)
   approved   Boolean   @default(false)
@@ -107,9 +107,9 @@ model Document {
   employeeId String
   // Logical category: LICENSE, SSN, TWIC, SAFETY_COUNCIL, CERTIFICATION, OTHER
   category   String
-  label      String?  // optional human label (e.g. cert name)
-  fileName   String   // original filename
-  storageKey String   // key/path in the storage backend
+  label      String? // optional human label (e.g. cert name)
+  fileName   String // original filename
+  storageKey String // key/path in the storage backend
   mimeType   String
   size       Int
   createdAt  DateTime @default(now())
@@ -118,13 +118,13 @@ model Document {
 // Application users (staff). Distinct from Employee onboarding records.
 // role is one of the values in src/lib/rbac.ts ROLES.
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
+  id           String               @id @default(cuid())
+  email        String               @unique
   name         String?
-  role         String     @default("EMPLOYEE")
+  role         String               @default("EMPLOYEE")
   passwordHash String
-  active       Boolean    @default(true)
-  createdAt    DateTime   @default(now())
+  active       Boolean              @default(true)
+  createdAt    DateTime             @default(now())
   sessions     Session[]
   sites        UserSite[]
   resetTokens  PasswordResetToken[]
@@ -213,22 +213,24 @@ model Client {
 // given final sign-off (which triggers the client email) by an Admin.
 // status: DRAFT | SUBMITTED | AM_APPROVED | ADMIN_APPROVED | SENT
 model Invoice {
-  id              String    @id @default(cuid())
-  clientId        String
-  client          Client    @relation(fields: [clientId], references: [id])
-  site            String
-  jobNumber       String?
-  status          String    @default("DRAFT")
-  createdByUserId String
-  rejectionReason String?
+  id               String    @id @default(cuid())
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id])
+  site             String
+  jobNumber        String?
+  poNumber         String?
+  status           String    @default("DRAFT")
+  createdByUserId  String
+  rejectionReason  String?
   rejectedByUserId String?
-  archived        Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  sentAt          DateTime?
+  archived         Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sentAt           DateTime?
 
   lineItems   InvoiceLineItem[]
   attachments InvoiceAttachment[]
+  comments    InvoiceComment[]
 }
 
 // Free-form invoice line (description + amount), entered by the Project Manager.
@@ -253,4 +255,16 @@ model InvoiceAttachment {
   mimeType   String
   size       Int
   createdAt  DateTime @default(now())
+}
+
+// A comment left on an invoice by anyone who can view it (PM/PL on their
+// site, AM, or admin) -- a simple running discussion thread.
+model InvoiceComment {
+  id           String   @id @default(cuid())
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId    String
+  authorUserId String
+  authorName   String
+  message      String
+  createdAt    DateTime @default(now())
 }
