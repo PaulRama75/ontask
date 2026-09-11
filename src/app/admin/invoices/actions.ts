@@ -1,5 +1,6 @@
 "use server";
 
+import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getAccessMap, canView, getRestrictedSites, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
@@ -176,6 +177,74 @@ export async function addLineItem(form: FormData): Promise<void> {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive number.");
 
   await prisma.invoiceLineItem.create({ data: { invoiceId, description, amount } });
+  await touchInvoice(invoiceId, me);
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+}
+
+// Cell values can come back as rich text, a formula result object, a plain
+// string/number, or null -- coerce whichever shape into something usable.
+function cellText(v: ExcelJS.CellValue): string {
+  if (v == null) return "";
+  if (typeof v === "object") {
+    if ("richText" in v) return v.richText.map((t) => t.text).join("");
+    if ("text" in v) return String(v.text);
+    if ("result" in v) return String(v.result);
+  }
+  return String(v).trim();
+}
+
+function cellNumber(v: ExcelJS.CellValue): number {
+  if (typeof v === "number") return v;
+  if (v != null && typeof v === "object" && "result" in v) return Number(v.result);
+  return Number(cellText(v));
+}
+
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB
+
+// Bulk-adds line items from an uploaded .xlsx file. Expects a Description
+// column and an Amount column (in either order, anywhere on the sheet's
+// first two used columns); header/blank/invalid rows are silently skipped.
+export async function importLineItemsFromExcel(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const invoiceId = String(form.get("invoiceId") ?? "");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
+  if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("Choose an Excel file to import.");
+  if (file.size > MAX_IMPORT_BYTES) throw new Error("File exceeds the 5 MB limit.");
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const workbook = new ExcelJS.Workbook();
+  try {
+    // exceljs's bundled @types/node predates Node 20's Buffer<T> generic,
+    // so its Buffer parameter type doesn't structurally match ours.
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+  } catch {
+    throw new Error("Couldn't read that file -- make sure it's a valid .xlsx workbook.");
+  }
+  const sheet = workbook.worksheets[0];
+  if (!sheet) throw new Error("The file has no worksheet to import.");
+
+  const rows: { description: string; amount: number }[] = [];
+  sheet.eachRow((row) => {
+    const description = cellText(row.getCell(1).value);
+    const amount = cellNumber(row.getCell(2).value);
+    if (!description || description.toLowerCase() === "description") return; // blank/header row
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    rows.push({ description, amount });
+  });
+
+  if (rows.length === 0) {
+    throw new Error("No valid rows found -- expected columns: Description, Amount.");
+  }
+
+  await prisma.invoiceLineItem.createMany({
+    data: rows.map((r) => ({ invoiceId, description: r.description, amount: r.amount })),
+  });
   await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }

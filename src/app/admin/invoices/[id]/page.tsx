@@ -7,6 +7,7 @@ import AttachmentUploadForm from "../AttachmentUploadForm";
 import DownloadAllButton from "../DownloadAllButton";
 import {
   addLineItem,
+  importLineItemsFromExcel,
   deleteLineItem,
   uploadInvoiceAttachment,
   deleteInvoiceAttachment,
@@ -234,6 +235,26 @@ export default async function InvoiceDetailPage({
               >
                 Add
               </button>
+            </form>
+          )}
+
+          {isDraftEditable && (
+            <form action={importLineItemsFromExcel} className="mt-3 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="invoiceId" value={invoice.id} />
+              <input
+                type="file"
+                name="file"
+                accept=".xlsx"
+                required
+                className="text-sm text-slate-300"
+              />
+              <button
+                type="submit"
+                className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+              >
+                Import from Excel
+              </button>
+              <span className="text-xs text-slate-500">Columns: Description, Amount</span>
             </form>
           )}
         </section>
