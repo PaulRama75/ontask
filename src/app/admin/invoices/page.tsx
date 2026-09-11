@@ -8,7 +8,16 @@ import InvoiceControls from "./InvoiceControls";
 
 export const dynamic = "force-dynamic";
 
-const SORT_KEYS = ["site", "client", "jobNumber", "total", "status", "createdAt", "updatedAt"] as const;
+const SORT_KEYS = [
+  "site",
+  "client",
+  "invoiceNumber",
+  "jobNumber",
+  "total",
+  "status",
+  "createdAt",
+  "updatedAt",
+] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 
 function isSortKey(v: string): v is SortKey {
@@ -90,6 +99,8 @@ export default async function InvoicesPage({
         return sign * a.site.localeCompare(b.site);
       case "client":
         return sign * a.client.name.localeCompare(b.client.name);
+      case "invoiceNumber":
+        return sign * (a.invoiceNumber ?? "").localeCompare(b.invoiceNumber ?? "");
       case "jobNumber":
         return sign * (a.jobNumber ?? "").localeCompare(b.jobNumber ?? "");
       case "total":
@@ -169,6 +180,7 @@ export default async function InvoicesPage({
               <tr>
                 <SortHeader sortKey="site" label="Site" />
                 <SortHeader sortKey="client" label="Client" />
+                <SortHeader sortKey="invoiceNumber" label="Invoice#" />
                 <SortHeader sortKey="jobNumber" label="Job No#" />
                 <SortHeader sortKey="total" label="Total" />
                 <SortHeader sortKey="status" label="Status" />
@@ -180,7 +192,7 @@ export default async function InvoicesPage({
             <tbody>
               {invoices.length === 0 && (
                 <tr>
-                  <td className={`${td} text-center text-slate-500`} colSpan={7}>
+                  <td className={`${td} text-center text-slate-500`} colSpan={8}>
                     {all.length === 0 ? "No invoices yet." : "No invoices match your search/filter."}
                   </td>
                 </tr>
@@ -195,6 +207,7 @@ export default async function InvoicesPage({
                       </Link>
                     </td>
                     <td className={td}>{inv.client.name}</td>
+                    <td className={td}>{inv.invoiceNumber || "—"}</td>
                     <td className={td}>{inv.jobNumber || "—"}</td>
                     <td className={td}>${total.toFixed(2)}</td>
                     <td className={td}>

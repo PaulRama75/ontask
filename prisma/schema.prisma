@@ -222,6 +222,7 @@ model Invoice {
   clientId         String
   client           Client    @relation(fields: [clientId], references: [id])
   site             String
+  invoiceNumber    String?
   jobNumber        String?
   poNumber         String?
   status           String    @default("DRAFT")

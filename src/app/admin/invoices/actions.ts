@@ -163,6 +163,25 @@ export async function updateClientName(form: FormData): Promise<void> {
   revalidatePath("/admin/invoices");
 }
 
+// Invoice# is entered manually, any time after creation (not collected on
+// the New Invoice form) -- e.g. once the accounting system assigns one.
+export async function updateInvoiceNumber(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const invoiceId = String(form.get("invoiceId") ?? "");
+  const invoiceNumber = String(form.get("invoiceNumber") ?? "").trim() || null;
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { invoiceNumber, lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
+  });
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath("/admin/invoices");
+}
+
 export async function addLineItem(form: FormData): Promise<void> {
   const me = await requirePM();
   const invoiceId = String(form.get("invoiceId") ?? "");

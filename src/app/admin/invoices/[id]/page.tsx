@@ -23,6 +23,7 @@ import {
   notifyNextRole,
   addInvoiceComment,
   updateClientName,
+  updateInvoiceNumber,
   deleteInvoice,
 } from "../actions";
 import ConfirmSubmitButton from "../../ConfirmSubmitButton";
@@ -328,7 +329,24 @@ export default async function InvoiceDetailPage({
         </section>
 
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <h2 className="text-lg font-semibold text-white">Comments</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Comments</h2>
+            {isOwner ? (
+              <form action={updateInvoiceNumber} className="flex items-center gap-1">
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <label className="text-xs text-slate-400">Invoice#</label>
+                <input
+                  name="invoiceNumber"
+                  defaultValue={invoice.invoiceNumber ?? ""}
+                  placeholder="—"
+                  className="w-24 rounded border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+                />
+                <button className="text-xs text-cyan-400 hover:underline">Save</button>
+              </form>
+            ) : (
+              <span className="text-xs text-slate-400">Invoice# {invoice.invoiceNumber || "—"}</span>
+            )}
+          </div>
           <ul className="mt-3 space-y-3 text-sm">
             {invoice.comments.length === 0 && <li className="text-slate-500">No comments yet.</li>}
             {invoice.comments.map((c) => (
