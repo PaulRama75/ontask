@@ -14,12 +14,14 @@ import {
   submitInvoice,
   approveInvoice,
   rejectInvoice,
-  approveAndSend,
+  approveInvoiceFinal,
+  sendInvoiceToClient,
   archiveInvoice,
   unarchiveInvoice,
   replyToRejection,
   notifyNextRole,
   addInvoiceComment,
+  updateClientName,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -114,7 +116,21 @@ export default async function InvoiceDetailPage({
             <tbody>
               <tr>
                 <td className="px-4 py-2 text-slate-200">{invoice.site}</td>
-                <td className="px-4 py-2 text-slate-200">{invoice.client.name}</td>
+                <td className="px-4 py-2 text-slate-200">
+                  {isOwner ? (
+                    <form action={updateClientName} className="flex items-center gap-1">
+                      <input type="hidden" name="invoiceId" value={invoice.id} />
+                      <input
+                        name="clientName"
+                        defaultValue={invoice.client.name}
+                        className="w-28 rounded border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
+                      />
+                      <button className="text-xs text-cyan-400 hover:underline">Save</button>
+                    </form>
+                  ) : (
+                    invoice.client.name
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   <a href={`mailto:${invoice.client.email}`} className="text-cyan-400 hover:underline">
                     {invoice.client.email}
@@ -361,14 +377,26 @@ export default async function InvoiceDetailPage({
               </form>
             )}
 
-            {isAdmin && (invoice.status === "AM_APPROVED" || invoice.status === "ADMIN_APPROVED") && (
-              <form action={approveAndSend}>
+            {isAdmin && invoice.status === "AM_APPROVED" && (
+              <form action={approveInvoiceFinal}>
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <button
                   type="submit"
                   className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
                 >
-                  {invoice.status === "ADMIN_APPROVED" ? "Retry send to client" : "Approve & send to client"}
+                  Approve
+                </button>
+              </form>
+            )}
+
+            {isAdmin && invoice.status === "ADMIN_APPROVED" && (
+              <form action={sendInvoiceToClient}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+                >
+                  Send
                 </button>
               </form>
             )}

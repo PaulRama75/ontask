@@ -116,6 +116,24 @@ export async function createInvoice(
   redirect(`/admin/invoices/${invoice.id}`);
 }
 
+// Corrects the client's display name (e.g. an auto-derived name that came
+// out wrong). Edits the shared Client record, so it applies to every
+// invoice for that client/site, not just this one.
+export async function updateClientName(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const invoiceId = String(form.get("invoiceId") ?? "");
+  const name = String(form.get("clientName") ?? "").trim();
+  if (!name) throw new Error("Client name is required.");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+
+  await prisma.client.update({ where: { id: invoice.clientId }, data: { name } });
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath("/admin/invoices");
+}
+
 export async function addLineItem(form: FormData): Promise<void> {
   const me = await requirePM();
   const invoiceId = String(form.get("invoiceId") ?? "");
@@ -419,7 +437,35 @@ export async function rejectInvoice(form: FormData): Promise<void> {
   revalidatePath("/admin/invoices");
 }
 
-export async function approveAndSend(form: FormData): Promise<void> {
+// Admin's final approval, separate from actually sending the invoice.
+// Notifies Account Managers that it's approved and about to go out.
+export async function approveInvoiceFinal(form: FormData): Promise<void> {
+  await requireAdminUser();
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.status !== "AM_APPROVED") {
+    throw new Error("Invoice must be Account-Manager approved before it can be approved.");
+  }
+
+  await prisma.invoice.update({ where: { id }, data: { status: "ADMIN_APPROVED" } });
+
+  const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
+  for (const am of ams) {
+    await sendEmail({
+      to: am.email,
+      subject: `Invoice approved — ${invoice.site}`,
+      html: `<p>The invoice for ${escapeHtml(invoice.site)} has been approved and will be sent to the client.</p>`,
+    });
+  }
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
+// Sends the approved invoice to the client. Separate step from approval so
+// an admin can approve without immediately triggering the client email.
+export async function sendInvoiceToClient(form: FormData): Promise<void> {
   await requireAdminUser();
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({
@@ -427,12 +473,8 @@ export async function approveAndSend(form: FormData): Promise<void> {
     include: { client: true, lineItems: true, attachments: true },
   });
   if (!invoice) throw new Error("Invoice not found");
-  if (invoice.status !== "AM_APPROVED" && invoice.status !== "ADMIN_APPROVED") {
-    throw new Error("Invoice must be Account-Manager approved before it can be sent.");
-  }
-
-  if (invoice.status === "AM_APPROVED") {
-    await prisma.invoice.update({ where: { id }, data: { status: "ADMIN_APPROVED" } });
+  if (invoice.status !== "ADMIN_APPROVED") {
+    throw new Error("Invoice must be approved before it can be sent to the client.");
   }
 
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
@@ -471,7 +513,7 @@ ${rows}
   revalidatePath("/admin/invoices");
 
   if (!sent) {
-    throw new Error("Email to the client failed to send. The invoice is approved — click Send again to retry.");
+    throw new Error("Email to the client failed to send. Click Send again to retry.");
   }
 }
 
