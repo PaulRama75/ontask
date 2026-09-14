@@ -12,7 +12,7 @@ import {
   firstAllowedNavHref,
   getRestrictedSites,
 } from "@/lib/rbac";
-import { setApproved, setActive, setArchived } from "../actions";
+import { setApproved, setHrReviewed, setActive, setArchived } from "../actions";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import GridControls from "./GridControls";
 import SiteCell from "./SiteCell";
@@ -241,6 +241,7 @@ export default async function GridPage({
                 {show("creditCard") && <th className={th}>Credit Card</th>}
                 {show("emailNeeded") && <th className={th}>Email Needed</th>}
                 {show("benefits") && <th className={th}>Benefits</th>}
+                {show("hrReviewed") && <th className={th}>HR Reviewed</th>}
                 {show("approved") && <th className={th}>Approved</th>}
                 {show("archived") && <th className={th}>Archived</th>}
               </tr>
@@ -523,6 +524,36 @@ export default async function GridPage({
                     {show("benefits") && (
                       <td className={`${td} whitespace-nowrap text-center`}>
                         <span>{yesNo(hasBenefits(e.employmentType))}</span>
+                      </td>
+                    )}
+                    {show("hrReviewed") && (
+                      <td className={`${td} whitespace-nowrap text-center`}>
+                        {approvable("hrReviewed") ? (
+                          <form action={setHrReviewed}>
+                            <input type="hidden" name="employeeId" value={e.id} />
+                            <input type="hidden" name="hrReviewed" value={(!e.hrReviewed).toString()} />
+                            <button
+                              type="submit"
+                              className={
+                                e.hrReviewed
+                                  ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
+                                  : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+                              }
+                            >
+                              {e.hrReviewed ? "Reviewed ✓" : "Mark reviewed"}
+                            </button>
+                          </form>
+                        ) : (
+                          <span
+                            className={
+                              e.hrReviewed
+                                ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
+                                : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
+                            }
+                          >
+                            {e.hrReviewed ? "Reviewed ✓" : "Pending"}
+                          </span>
+                        )}
                       </td>
                     )}
                     {show("approved") && (

@@ -64,6 +64,9 @@ export const COLUMNS = [
   // Read-only on the grid — derived from the "Benefits" option inside the
   // Employment Type field on the employee library page, not its own value.
   { key: "benefits", label: "Benefits" },
+  // HR's review checkpoint (SUBMITTED -> HR_REVIEW). "canApprove" gates who
+  // may toggle it, same as "approved" below.
+  { key: "hrReviewed", label: "HR Reviewed" },
   { key: "approved", label: "Approved" },
   { key: "archived", label: "Archived" },
   // Not a grid column: gates who can open an employee's document library page
@@ -113,9 +116,16 @@ export function defaultAccess(role: Role, columnKey: string): ColumnAccess {
       return { level: "VIEW", canApprove: false };
     case "HR":
       if (
-        ["email", "phone", "address", "ssn", "driverLicense", "utilityBill", "approved"].includes(
-          columnKey,
-        )
+        [
+          "email",
+          "phone",
+          "address",
+          "ssn",
+          "driverLicense",
+          "utilityBill",
+          "hrReviewed",
+          "approved",
+        ].includes(columnKey)
       )
         return { level: "EDIT", canApprove: columnKey !== "approved" };
       return { level: "VIEW", canApprove: false };

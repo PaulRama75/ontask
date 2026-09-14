@@ -93,6 +93,32 @@ export async function setApproved(formData: FormData): Promise<void> {
   revalidatePath("/admin/grid");
 }
 
+// HR's review checkpoint. Only crosses the SUBMITTED <-> HR_REVIEW boundary --
+// never clobbers RATES_ASSIGNED/APPROVED, so a later un-check doesn't undo
+// progress that's already moved on.
+export async function setHrReviewed(formData: FormData): Promise<void> {
+  await requireColumn("hrReviewed", "approve");
+  const id = String(formData.get("employeeId") ?? "");
+  const reviewed = String(formData.get("hrReviewed") ?? "") === "true";
+  if (!id) return;
+
+  const employee = await prisma.employee.findUnique({ where: { id }, select: { status: true } });
+  if (!employee) return;
+
+  const data: Record<string, unknown> = {
+    hrReviewed: reviewed,
+    hrReviewedAt: reviewed ? new Date() : null,
+  };
+  if (reviewed && employee.status === "SUBMITTED") {
+    data.status = "HR_REVIEW";
+  } else if (!reviewed && employee.status === "HR_REVIEW") {
+    data.status = "SUBMITTED";
+  }
+
+  await prisma.employee.update({ where: { id }, data });
+  revalidatePath("/admin/grid");
+}
+
 // Project Lead: set the employee's job site.
 export async function setSite(formData: FormData): Promise<void> {
   await requireColumn("site", "edit");
@@ -104,6 +130,30 @@ export async function setSite(formData: FormData): Promise<void> {
     data: { site: site || null },
   });
   revalidatePath("/admin/grid");
+}
+
+// Keeps status in sync with pay/bill rate: RATES_ASSIGNED once both are set
+// (from either SUBMITTED or HR_REVIEW -- rates and HR review can happen in
+// either order), reverting to HR_REVIEW/SUBMITTED if a rate gets cleared
+// again. Never touches APPROVED -- already signed off.
+async function syncRatesStatus(id: string): Promise<void> {
+  const employee = await prisma.employee.findUnique({
+    where: { id },
+    select: { status: true, payRate: true, billRate: true, hrReviewed: true },
+  });
+  if (!employee) return;
+  const bothSet = employee.payRate != null && employee.billRate != null;
+  if (bothSet && (employee.status === "SUBMITTED" || employee.status === "HR_REVIEW")) {
+    await prisma.employee.update({
+      where: { id },
+      data: { status: "RATES_ASSIGNED", ratesAssignedAt: new Date() },
+    });
+  } else if (!bothSet && employee.status === "RATES_ASSIGNED") {
+    await prisma.employee.update({
+      where: { id },
+      data: { status: employee.hrReviewed ? "HR_REVIEW" : "SUBMITTED", ratesAssignedAt: null },
+    });
+  }
 }
 
 // Project Lead: set the employee's pay or bill rate.
@@ -119,6 +169,7 @@ export async function setRate(formData: FormData): Promise<void> {
     where: { id },
     data: { [field]: value },
   });
+  await syncRatesStatus(id);
   revalidatePath("/admin/grid");
 }
 
@@ -324,6 +375,9 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
 
   if (Object.keys(data).length > 0) {
     await prisma.employee.update({ where: { id }, data });
+  }
+  if ("payRate" in data || "billRate" in data) {
+    await syncRatesStatus(id);
   }
   revalidatePath("/admin/grid");
   revalidatePath(`/admin/employee/${id}`);

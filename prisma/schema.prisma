@@ -79,6 +79,15 @@ model Employee {
   status String @default("DRAFT")
   source String @default("LINK") // LINK or EXCEL
 
+  // HR's review checkpoint. Advances status SUBMITTED -> HR_REVIEW; unchecking
+  // reverts HR_REVIEW -> SUBMITTED. Same on/off shape as `approved` below.
+  hrReviewed   Boolean   @default(false)
+  hrReviewedAt DateTime?
+
+  // Not a toggle -- computed from payRate + billRate both being set (see
+  // syncRatesStatus in admin/actions.ts). Timestamp only, for the record.
+  ratesAssignedAt DateTime?
+
   // Overall approval (per-column approval workflow comes in Phase 3)
   approved   Boolean   @default(false)
   approvedAt DateTime?
