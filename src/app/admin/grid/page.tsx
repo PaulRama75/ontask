@@ -285,6 +285,15 @@ export default async function GridPage({
                             Duplicate
                           </span>
                         )}
+                        {canLibrary && e.documents.length > 0 && (
+                          <a
+                            href={`/api/documents-export/${e.id}`}
+                            title={`Download ${name}'s documents`}
+                            className="ml-1 text-xs font-normal text-slate-500 hover:text-cyan-400"
+                          >
+                            ⬇
+                          </a>
+                        )}
                       </td>
                     )}
                     {show("site") && (

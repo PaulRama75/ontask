@@ -367,7 +367,17 @@ export default async function EmployeeLibraryPage({
         {canLib && (
         <>
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <h2 className="text-lg font-semibold text-white">Documents</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Documents</h2>
+            {e.documents.length > 0 && (
+              <a
+                href={`/api/documents-export/${e.id}`}
+                className="text-sm text-cyan-400 hover:underline"
+              >
+                Download all
+              </a>
+            )}
+          </div>
           <div className="mt-3 space-y-4">
             {DOCUMENT_CATEGORIES.map((cat) => {
               const docs = docsByCategory(cat.key);
