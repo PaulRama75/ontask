@@ -46,8 +46,10 @@ model Employee {
   active   Boolean @default(true)
   archived Boolean @default(false) // hidden from the grid by default once set
 
-  // Project Lead assigned at onboarding-link creation; notified on completion.
-  projectLeadEmail String?
+  // Project Lead / Project Manager assigned at onboarding-link creation;
+  // both notified on completion.
+  projectLeadEmail    String?
+  projectManagerEmail String?
 
   // Rate info (set by Project Lead in Phase 3; placeholder now)
   payRate  Float?
@@ -142,6 +144,11 @@ model User {
   // (final-approval alerts, "Email Admins" nudges). At most one user should
   // have this set true at a time -- enforced in the server action, not the DB.
   receivesInvoiceAdminEmails Boolean @default(false)
+
+  // The single designated recipient for onboarding-submission emails,
+  // falling back to every active HR user if nobody's designated. Same
+  // single-recipient convention as receivesInvoiceAdminEmails above.
+  receivesOnboardingHrEmails Boolean @default(false)
 }
 
 // Site-level (row) access. A non-admin user with one or more UserSite rows is

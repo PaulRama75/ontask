@@ -16,7 +16,7 @@ export default async function AdminPage() {
   const nav = await getNavAccess(me.role);
   if (!nav.onboarding) redirect(firstAllowedNavHref(nav));
 
-  const [employees, projectLeads] = await Promise.all([
+  const [employees, projectLeads, projectManagers] = await Promise.all([
     prisma.employee.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -26,6 +26,11 @@ export default async function AdminPage() {
     }),
     prisma.user.findMany({
       where: { role: "PROJECT_LEAD", active: true },
+      select: { email: true, name: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { role: "PROJECT_MANAGER", active: true },
       select: { email: true, name: true },
       orderBy: { createdAt: "asc" },
     }),
@@ -54,7 +59,7 @@ export default async function AdminPage() {
 
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">New onboarding link</h2>
-          <form action={createOnboardingLink} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-5">
+          <form action={createOnboardingLink} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
             <input name="firstName" placeholder="First name" className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400" />
             <input name="lastName" placeholder="Last name" className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400" />
             <input name="email" type="email" required placeholder="Email (required)" className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400" />
@@ -70,6 +75,18 @@ export default async function AdminPage() {
                 </option>
               ))}
             </select>
+            <select
+              name="projectManagerEmail"
+              defaultValue=""
+              className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
+            >
+              <option value="">Project Manager (optional)</option>
+              {projectManagers.map((pm) => (
+                <option key={pm.email} value={pm.email}>
+                  {pm.name ? `${pm.name} (${pm.email})` : pm.email}
+                </option>
+              ))}
+            </select>
             <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
               Generate link
             </button>
@@ -77,6 +94,11 @@ export default async function AdminPage() {
           {projectLeads.length === 0 && (
             <p className="mt-2 text-xs text-amber-400">
               No Project Lead users exist yet. Add one under Users to assign them here.
+            </p>
+          )}
+          {projectManagers.length === 0 && (
+            <p className="mt-1 text-xs text-amber-400">
+              No Project Manager users exist yet. Add one under Users to assign them here.
             </p>
           )}
         </section>

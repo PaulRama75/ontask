@@ -156,18 +156,24 @@ export async function submitOnboarding(
     data: { usedAt: new Date() },
   });
 
-  // 4) Notify the assigned Project Lead and all HR (stubbed unless RESEND_API_KEY set).
-  // Recipients = every active HR user, the Project Lead chosen on this employee's
-  // onboarding link, plus the optional HR_NOTIFY_EMAIL env (backward compatibility).
-  const hrUsers = await prisma.user.findMany({
-    where: { active: true, role: "HR" },
+  // 4) Notify the assigned Project Lead/Project Manager and HR (stubbed unless
+  // RESEND_API_KEY set). HR recipients = the designated onboarding HR contact
+  // if one's been set (Users page), else every active HR user -- same
+  // single-recipient-with-fallback convention as invoice admin notifications.
+  const designatedHr = await prisma.user.findMany({
+    where: { active: true, receivesOnboardingHrEmails: true },
     select: { email: true },
   });
+  const hrUsers =
+    designatedHr.length > 0
+      ? designatedHr
+      : await prisma.user.findMany({ where: { active: true, role: "HR" }, select: { email: true } });
   const recipients = new Set<string>();
   for (const u of hrUsers) {
     if (u.email) recipients.add(u.email);
   }
   if (link.employee.projectLeadEmail) recipients.add(link.employee.projectLeadEmail);
+  if (link.employee.projectManagerEmail) recipients.add(link.employee.projectManagerEmail);
   if (process.env.HR_NOTIFY_EMAIL) recipients.add(process.env.HR_NOTIFY_EMAIL);
 
   if (recipients.size > 0) {

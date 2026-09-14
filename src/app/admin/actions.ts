@@ -34,12 +34,21 @@ export async function createOnboardingLink(form: FormData): Promise<void> {
   const lastName = String(form.get("lastName") ?? "").trim() || null;
   const email = String(form.get("email") ?? "").trim() || null;
   const projectLeadEmail = String(form.get("projectLeadEmail") ?? "").trim() || null;
+  const projectManagerEmail = String(form.get("projectManagerEmail") ?? "").trim() || null;
 
   // An email is required so the new employee can be sent their onboarding link.
   if (!email) throw new Error("An employee email is required to send the onboarding link.");
 
   const employee = await prisma.employee.create({
-    data: { firstName, lastName, email, projectLeadEmail, status: "DRAFT", source: "LINK" },
+    data: {
+      firstName,
+      lastName,
+      email,
+      projectLeadEmail,
+      projectManagerEmail,
+      status: "DRAFT",
+      source: "LINK",
+    },
   });
 
   const token = nanoid(24);

@@ -8,6 +8,8 @@ import {
   setUserActive,
   setInvoiceAdminRecipient,
   clearInvoiceAdminRecipient,
+  setOnboardingHrRecipient,
+  clearOnboardingHrRecipient,
   deleteUser,
 } from "./actions";
 import NewUserForm from "./NewUserForm";
@@ -22,6 +24,7 @@ export default async function UsersPage() {
 
   const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
   const invoiceAdminRecipient = users.find((u) => u.receivesInvoiceAdminEmails) ?? null;
+  const onboardingHrRecipient = users.find((u) => u.receivesOnboardingHrEmails) ?? null;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -44,6 +47,19 @@ export default async function UsersPage() {
         . Pick "Notify" on an Admin/Super Admin below to designate a single recipient instead.
       </section>
 
+      <section className="mt-4 rounded-lg border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-400 shadow-lg shadow-black/30 backdrop-blur">
+        Onboarding submission emails go to{" "}
+        {onboardingHrRecipient ? (
+          <span className="font-medium text-slate-200">
+            {onboardingHrRecipient.name || onboardingHrRecipient.email}
+          </span>
+        ) : (
+          <span className="font-medium text-slate-200">every active HR user</span>
+        )}
+        {" "}(plus the Project Lead/Manager picked when the link was created). Pick "Notify" on an HR
+        user below to designate a single recipient instead.
+      </section>
+
       <section className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
@@ -53,6 +69,7 @@ export default async function UsersPage() {
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Active</th>
               <th className="px-4 py-3">Invoice notifications</th>
+              <th className="px-4 py-3">Onboarding notifications</th>
               {me.role === "SUPER_ADMIN" && <th className="px-4 py-3"></th>}
             </tr>
           </thead>
@@ -114,6 +131,27 @@ export default async function UsersPage() {
                       </form>
                     ) : (
                       <form action={setInvoiceAdminRecipient}>
+                        <input type="hidden" name="userId" value={u.id} />
+                        <button className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5">
+                          Notify
+                        </button>
+                      </form>
+                    )
+                  ) : (
+                    <span className="text-xs text-slate-600">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {u.role === "HR" ? (
+                    u.receivesOnboardingHrEmails ? (
+                      <form action={clearOnboardingHrRecipient} className="flex items-center gap-2">
+                        <span className="rounded-md bg-cyan-500/15 px-2 py-1 text-xs font-semibold text-cyan-300">
+                          Notifying
+                        </span>
+                        <button className="text-xs text-slate-400 hover:underline">Clear</button>
+                      </form>
+                    ) : (
+                      <form action={setOnboardingHrRecipient}>
                         <input type="hidden" name="userId" value={u.id} />
                         <button className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5">
                           Notify

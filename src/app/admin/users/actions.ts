@@ -112,3 +112,30 @@ export async function clearInvoiceAdminRecipient(): Promise<void> {
   });
   revalidatePath("/admin/users");
 }
+
+// Designates the single recipient for onboarding-submission notifications.
+// Same single-recipient convention as setInvoiceAdminRecipient above.
+export async function setOnboardingHrRecipient(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(form.get("userId") ?? "");
+  if (!id) return;
+  await prisma.$transaction([
+    prisma.user.updateMany({
+      where: { receivesOnboardingHrEmails: true },
+      data: { receivesOnboardingHrEmails: false },
+    }),
+    prisma.user.update({ where: { id }, data: { receivesOnboardingHrEmails: true } }),
+  ]);
+  revalidatePath("/admin/users");
+}
+
+// Clears the designated recipient entirely, reverting onboarding-submission
+// notifications to every active HR user.
+export async function clearOnboardingHrRecipient(): Promise<void> {
+  await requireAdmin();
+  await prisma.user.updateMany({
+    where: { receivesOnboardingHrEmails: true },
+    data: { receivesOnboardingHrEmails: false },
+  });
+  revalidatePath("/admin/users");
+}
