@@ -4,6 +4,7 @@ export const STATUS_LABEL: Record<string, string> = {
   AM_APPROVED: "AM Approved",
   ADMIN_APPROVED: "Admin Approved (sending)",
   SENT: "Sent",
+  PAID: "Paid",
 };
 
 export const STATUS_STYLE: Record<string, string> = {
@@ -12,4 +13,5 @@ export const STATUS_STYLE: Record<string, string> = {
   AM_APPROVED: "bg-blue-500/15 text-blue-300",
   ADMIN_APPROVED: "bg-blue-500/15 text-blue-300",
   SENT: "bg-emerald-500/15 text-emerald-300",
+  PAID: "bg-teal-500/20 text-teal-300",
 };

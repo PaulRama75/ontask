@@ -17,6 +17,7 @@ import {
   rejectInvoice,
   approveInvoiceFinal,
   sendInvoiceToClient,
+  markInvoicePaid,
   archiveInvoice,
   unarchiveInvoice,
   replyToRejection,
@@ -438,6 +439,18 @@ export default async function InvoiceDetailPage({
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
                 >
                   Send
+                </button>
+              </form>
+            )}
+
+            {isAdmin && invoice.status === "SENT" && (
+              <form action={markInvoicePaid}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-teal-900/40 hover:bg-teal-500"
+                >
+                  Paid
                 </button>
               </form>
             )}

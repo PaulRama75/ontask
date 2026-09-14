@@ -216,7 +216,7 @@ model Client {
 
 // An invoice built by a Project Manager, reviewed by an Account Manager, and
 // given final sign-off (which triggers the client email) by an Admin.
-// status: DRAFT | SUBMITTED | AM_APPROVED | ADMIN_APPROVED | SENT
+// status: DRAFT | SUBMITTED | AM_APPROVED | ADMIN_APPROVED | SENT | PAID
 model Invoice {
   id               String    @id @default(cuid())
   clientId         String
@@ -233,6 +233,7 @@ model Invoice {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   sentAt           DateTime?
+  paidAt           DateTime?
 
   // Denormalized (like InvoiceComment.authorName) so the invoices list can
   // show who last touched it without joining to User.

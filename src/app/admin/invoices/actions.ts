@@ -673,6 +673,28 @@ ${rows}
   }
 }
 
+// Final lifecycle step, marking that payment has actually come in.
+export async function markInvoicePaid(form: FormData): Promise<void> {
+  const me = await requireAdminUser();
+  const id = String(form.get("invoiceId") ?? "");
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.status !== "SENT") throw new Error("Invoice must be sent before it can be marked paid.");
+
+  await prisma.invoice.update({
+    where: { id },
+    data: {
+      status: "PAID",
+      paidAt: new Date(),
+      lastModifiedByUserId: me.id,
+      lastModifiedByName: me.name || me.email,
+    },
+  });
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath("/admin/invoices");
+}
+
 // Manually re-sends the same notification that fires automatically on
 // submit/approve, for nudging the next reviewer without changing status.
 export async function notifyNextRole(form: FormData): Promise<void> {
