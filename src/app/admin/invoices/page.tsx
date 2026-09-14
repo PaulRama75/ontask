@@ -156,14 +156,19 @@ export default async function InvoicesPage({
                 : "Invoices awaiting or past your review."}
             </p>
           </div>
-          {(isPMorPL || isAdminRole(me.role)) && (
-            <Link
-              href="/admin/invoices/new"
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
-            >
-              + New invoice
+          <div className="flex items-center gap-3">
+            <Link href="/admin/invoices/billing" className="text-sm text-cyan-400 hover:underline">
+              Billing summary
             </Link>
-          )}
+            {(isPMorPL || isAdminRole(me.role)) && (
+              <Link
+                href="/admin/invoices/new"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
+              >
+                + New invoice
+              </Link>
+            )}
+          </div>
         </div>
 
         <InvoiceControls

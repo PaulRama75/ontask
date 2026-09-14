@@ -114,6 +114,7 @@ export async function createInvoice(
   const me = await requirePM();
 
   const site = String(form.get("site") ?? "").trim();
+  const clientName = String(form.get("clientName") ?? "").trim() || null;
   const clientEmail = String(form.get("clientEmail") ?? "").trim().toLowerCase();
   const jobNumber = String(form.get("jobNumber") ?? "").trim() || null;
   const poNumber = String(form.get("poNumber") ?? "").trim() || null;
@@ -123,8 +124,8 @@ export async function createInvoice(
 
   const client = await prisma.client.upsert({
     where: { email_site: { email: clientEmail, site } },
-    update: {},
-    create: { name: deriveClientName(clientEmail), email: clientEmail, site },
+    update: clientName ? { name: clientName } : {},
+    create: { name: clientName || deriveClientName(clientEmail), email: clientEmail, site },
   });
 
   const invoice = await prisma.invoice.create({

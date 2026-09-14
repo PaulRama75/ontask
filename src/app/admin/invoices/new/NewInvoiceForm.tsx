@@ -3,7 +3,13 @@
 import { useActionState } from "react";
 import { createInvoice, type CreateInvoiceResult } from "../actions";
 
-export default function NewInvoiceForm() {
+export default function NewInvoiceForm({
+  clientNames,
+  jobNumbers,
+}: {
+  clientNames: string[];
+  jobNumbers: string[];
+}) {
   const [state, formAction, pending] = useActionState<CreateInvoiceResult, FormData>(
     createInvoice,
     undefined,
@@ -23,6 +29,20 @@ export default function NewInvoiceForm() {
         />
       </div>
       <div>
+        <label className="block text-sm font-medium text-slate-300">Client name</label>
+        <input
+          name="clientName"
+          list="client-name-options"
+          placeholder="Leave blank to derive from email"
+          className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+        />
+        <datalist id="client-name-options">
+          {clientNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+      </div>
+      <div>
         <label className="block text-sm font-medium text-slate-300">Client email</label>
         <input
           name="clientEmail"
@@ -35,8 +55,14 @@ export default function NewInvoiceForm() {
         <label className="block text-sm font-medium text-slate-300">FER Job No#</label>
         <input
           name="jobNumber"
+          list="job-number-options"
           className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
         />
+        <datalist id="job-number-options">
+          {jobNumbers.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-300">PO#</label>
