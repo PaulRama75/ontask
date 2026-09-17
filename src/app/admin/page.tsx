@@ -2,9 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
+import { getNavAccess, firstAllowedNavHref, isAdminRole } from "@/lib/rbac";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
-import { createOnboardingLink } from "./actions";
+import { createOnboardingLink, deleteEmployee } from "./actions";
+import ConfirmSubmitButton from "./ConfirmSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function AdminPage() {
   if (!me) redirect("/login");
   const nav = await getNavAccess(me.role);
   if (!nav.onboarding) redirect(firstAllowedNavHref(nav));
+  const isAdmin = isAdminRole(me.role);
 
   const [employees, projectLeads, projectManagers] = await Promise.all([
     prisma.employee.findMany({
@@ -113,12 +115,13 @@ export default async function AdminPage() {
                 <th className="px-4 py-3">Docs</th>
                 <th className="px-4 py-3">Certs</th>
                 <th className="px-4 py-3">Onboarding link</th>
+                {isAdmin && <th className="px-4 py-3"></th>}
               </tr>
             </thead>
             <tbody>
               {employees.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
                     No employees yet. Generate a link above to get started.
                   </td>
                 </tr>
@@ -165,6 +168,19 @@ export default async function AdminPage() {
                         "—"
                       )}
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        <form action={deleteEmployee}>
+                          <input type="hidden" name="employeeId" value={e.id} />
+                          <ConfirmSubmitButton
+                            confirmMessage={`Delete ${employeeName}? This removes their onboarding record, documents, and certifications. This can't be undone.`}
+                            className="text-xs text-rose-300 hover:underline"
+                          >
+                            Delete
+                          </ConfirmSubmitButton>
+                        </form>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

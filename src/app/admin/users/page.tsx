@@ -70,7 +70,7 @@ export default async function UsersPage() {
               <th className="px-4 py-3">Active</th>
               <th className="px-4 py-3">Invoice notifications</th>
               <th className="px-4 py-3">Onboarding notifications</th>
-              {me.role === "SUPER_ADMIN" && <th className="px-4 py-3"></th>}
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -162,21 +162,19 @@ export default async function UsersPage() {
                     <span className="text-xs text-slate-600">—</span>
                   )}
                 </td>
-                {me.role === "SUPER_ADMIN" && (
-                  <td className="px-4 py-3">
-                    {u.id !== me.id && (
-                      <form action={deleteUser}>
-                        <input type="hidden" name="userId" value={u.id} />
-                        <ConfirmSubmitButton
-                          confirmMessage={`Delete ${u.name || u.email}? This can't be undone.`}
-                          className="text-xs text-rose-300 hover:underline"
-                        >
-                          Delete
-                        </ConfirmSubmitButton>
-                      </form>
-                    )}
-                  </td>
-                )}
+                <td className="px-4 py-3">
+                  {u.id !== me.id && (
+                    <form action={deleteUser}>
+                      <input type="hidden" name="userId" value={u.id} />
+                      <ConfirmSubmitButton
+                        confirmMessage={`Delete ${u.name || u.email}? This can't be undone.`}
+                        className="text-xs text-rose-300 hover:underline"
+                      >
+                        Delete
+                      </ConfirmSubmitButton>
+                    </form>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

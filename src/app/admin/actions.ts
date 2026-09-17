@@ -6,7 +6,7 @@ import { saveFile } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canEdit, canApprove } from "@/lib/rbac";
+import { getAccessMap, canEdit, canApprove, isAdminRole } from "@/lib/rbac";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
 const ALLOWED_MIME = new Set([
@@ -414,5 +414,18 @@ export async function setArchived(formData: FormData): Promise<void> {
     where: { id },
     data: { archived },
   });
+  revalidatePath("/admin/grid");
+}
+
+// Permanently removes an employee record (and, via cascade, their
+// certifications, documents, and onboarding link). Admin-only -- unlike
+// archive, this can't be undone.
+export async function deleteEmployee(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return;
+  await prisma.employee.delete({ where: { id } });
+  revalidatePath("/admin");
   revalidatePath("/admin/grid");
 }

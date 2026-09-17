@@ -12,14 +12,6 @@ async function requireAdmin() {
   return me;
 }
 
-// Deleting a user (unlike role changes / activation) is restricted to
-// Super Admin, same tier as who can see Access Control.
-async function requireSuperAdmin() {
-  const me = await getCurrentUser();
-  if (!me || me.role !== "SUPER_ADMIN") throw new Error("Not authorized");
-  return me;
-}
-
 export type UserActionResult = { ok: boolean; error?: string };
 
 export async function createUser(form: FormData): Promise<UserActionResult> {
@@ -78,7 +70,7 @@ export async function setUserActive(form: FormData): Promise<void> {
 }
 
 export async function deleteUser(form: FormData): Promise<void> {
-  const me = await requireSuperAdmin();
+  const me = await requireAdmin();
   const id = String(form.get("userId") ?? "");
   if (!id || id === me.id) return; // can't delete yourself
   await prisma.user.delete({ where: { id } });
