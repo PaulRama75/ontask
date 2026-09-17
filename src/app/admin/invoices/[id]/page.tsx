@@ -331,7 +331,7 @@ export default async function InvoiceDetailPage({
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Comments</h2>
-            {isOwner ? (
+            {isOwner || isAM ? (
               <form action={updateInvoiceNumber} className="flex items-center gap-1">
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <label className="text-xs text-slate-400">Invoice#</label>

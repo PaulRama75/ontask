@@ -167,13 +167,14 @@ export async function updateClientName(form: FormData): Promise<void> {
 // Invoice# is entered manually, any time after creation (not collected on
 // the New Invoice form) -- e.g. once the accounting system assigns one.
 export async function updateInvoiceNumber(form: FormData): Promise<void> {
-  const me = await requirePM();
+  const me = await getCurrentUser();
+  if (!me) throw new Error("Not authenticated");
   const invoiceId = String(form.get("invoiceId") ?? "");
   const invoiceNumber = String(form.get("invoiceNumber") ?? "").trim() || null;
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new Error("Invoice not found");
-  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+  if (!isInvoiceOwner(me, invoice) && me.role !== "ACCOUNT_MANAGER") throw new Error("Not authorized");
 
   await prisma.invoice.update({
     where: { id: invoiceId },
