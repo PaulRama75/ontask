@@ -51,12 +51,15 @@ export default async function EmployeeLibraryPage({
   if (!me) redirect("/login");
 
   // Access: the full library (PII + documents) requires the "library" permission.
-  // A Project Lead who can edit any PL field may open the page to fill those
-  // fields, but the sensitive sections stay hidden from them.
+  // A Project Lead who can edit any PL field, or a Project Manager, may open
+  // the page to fill/view those fields, but the sensitive sections stay
+  // hidden from them.
   const access = await getAccessMap(me.role);
   const canLib = canView(access, "library");
   const canEditPL = PL_FIELDS.some((k) => canEdit(access, k));
-  if (!canLib && !canEditPL) redirect("/admin/grid");
+  const isProjectLead = me.role === "PROJECT_LEAD";
+  const isProjectManager = me.role === "PROJECT_MANAGER";
+  if (!canLib && !canEditPL && !isProjectLead && !isProjectManager) redirect("/admin/grid");
 
   const { id } = await params;
   const e = await prisma.employee.findUnique({
@@ -64,6 +67,18 @@ export default async function EmployeeLibraryPage({
     include: { documents: { orderBy: { createdAt: "asc" } }, certifications: true },
   });
   if (!e) notFound();
+
+  // A Project Lead/Manager without full library access may only open
+  // employees they were personally assigned as the Project Lead/Manager for
+  // at link creation -- not every employee in the system.
+  if (!canLib) {
+    if (isProjectLead && e.projectLeadEmail?.toLowerCase() !== me.email.toLowerCase()) {
+      redirect("/admin/grid");
+    }
+    if (isProjectManager && e.projectManagerEmail?.toLowerCase() !== me.email.toLowerCase()) {
+      redirect("/admin/grid");
+    }
+  }
 
   // Site-level access: a restricted non-admin can't open employees outside their sites.
   if (!isAdminRole(me.role)) {
@@ -90,7 +105,7 @@ export default async function EmployeeLibraryPage({
           {canLib ? "Document library" : "Project Lead details"} · status {e.status}
         </p>
 
-        {(canLib || canEditPL) && (
+        {(canLib || canEditPL || isProjectLead || isProjectManager) && (
           <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
             <h2 className="text-lg font-semibold text-white">Project Lead Details</h2>
             <p className="mt-1 text-xs text-slate-400">
