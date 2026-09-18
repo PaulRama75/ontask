@@ -29,7 +29,7 @@ export default async function UsersPage() {
   const onboardingHrRecipient = users.find((u) => u.receivesOnboardingHrEmails) ?? null;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
+    <main className="mx-auto max-w-7xl px-4 py-8">
       <h1 className="text-2xl font-bold text-white">Users</h1>
       <p className="mt-1 text-sm text-slate-400">
         Create staff accounts and assign roles. Roles drive column access.
