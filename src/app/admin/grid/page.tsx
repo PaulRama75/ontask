@@ -24,10 +24,9 @@ import AddressCell from "./AddressCell";
 import UploadCell from "./UploadCell";
 import FlagCell from "./FlagCell";
 import FrcCell from "./FrcCell";
+import DocLinks from "./DocLinks";
 
 export const dynamic = "force-dynamic";
-
-type DocLite = { id: string; fileName: string; category: string; label: string | null };
 
 function fmtDate(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "—";
@@ -53,32 +52,6 @@ function hasBenefits(employmentType: string | null): boolean | null {
     .includes("Benefits");
 }
 
-// Renders attachment hyperlinks for a given document category. Prefers the
-// document's title (Document.label, e.g. a certification name) as the link
-// text so the user can tell which file is which without opening it.
-function DocLinks({ docs, category }: { docs: DocLite[]; category: string }) {
-  const items = docs.filter((d) => d.category === category);
-  if (items.length === 0) return <span className="text-slate-600">—</span>;
-  return (
-    <div className="flex flex-col gap-0.5">
-      {items.map((d, i) => {
-        const title = d.label?.trim();
-        return (
-          <a
-            key={d.id}
-            href={`/api/files/${d.id}`}
-            target="_blank"
-            className="text-cyan-400 hover:underline"
-            title={d.fileName}
-          >
-            {title || (items.length > 1 ? `file ${i + 1}` : "view")}
-          </a>
-        );
-      })}
-    </div>
-  );
-}
-
 export default async function GridPage({
   searchParams,
 }: {
@@ -93,6 +66,9 @@ export default async function GridPage({
   const editable = (k: string) => canEdit(access, k);
   const approvable = (k: string) => canApprove(access, k);
   const canLibrary = canView(access, "library") || me.hasFullDocumentAccess;
+  // Renaming/deleting attachments is a cleanup action, kept separate from
+  // library view/edit access -- only Admin/Super Admin get it.
+  const canManageDocs = isAdminRole(me.role);
   // Project Leads without library access can still open the employee page to
   // fill the grouped PL details form, so let them reach it from the name link.
   const canPLDetails = ["site", "hireDate", "payRate", "billRate", "frc", "creditCard", "emailNeeded"].some(
@@ -414,7 +390,7 @@ export default async function GridPage({
                         ) : (
                           <div className="text-xs text-slate-400">{e.driversLicenseNumber || ""}</div>
                         )}
-                        <DocLinks docs={e.documents} category="LICENSE" />
+                        <DocLinks employeeId={e.id} docs={e.documents} category="LICENSE" canManage={canManageDocs} />
                         {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}
                       </td>
                     )}
@@ -431,7 +407,7 @@ export default async function GridPage({
                         ) : (
                           <div>{fmtDate(e.safetyCouncilExpiry)}</div>
                         )}
-                        <DocLinks docs={e.documents} category="SAFETY_COUNCIL" />
+                        <DocLinks employeeId={e.id} docs={e.documents} category="SAFETY_COUNCIL" canManage={canManageDocs} />
                         {editable("safetyExpiry") && <UploadCell id={e.id} column="safetyExpiry" />}
                       </td>
                     )}
@@ -448,14 +424,14 @@ export default async function GridPage({
                         ) : (
                           <div>{fmtDate(e.twicExpiry)}</div>
                         )}
-                        <DocLinks docs={e.documents} category="TWIC" />
+                        <DocLinks employeeId={e.id} docs={e.documents} category="TWIC" canManage={canManageDocs} />
                         {editable("twicExpiry") && <UploadCell id={e.id} column="twicExpiry" />}
                       </td>
                     )}
                     {show("certification") && (
                       <td className={td}>
                         <div className="text-xs text-slate-400">{certNames}</div>
-                        <DocLinks docs={e.documents} category="CERTIFICATION" />
+                        <DocLinks employeeId={e.id} docs={e.documents} category="CERTIFICATION" canManage={canManageDocs} />
                         {editable("certification") && (
                           <UploadCell
                             id={e.id}
@@ -467,7 +443,7 @@ export default async function GridPage({
                     )}
                     {show("utilityBill") && (
                       <td className={td}>
-                        <DocLinks docs={e.documents} category="UTILITY_BILL" />
+                        <DocLinks employeeId={e.id} docs={e.documents} category="UTILITY_BILL" canManage={canManageDocs} />
                         {editable("utilityBill") && <UploadCell id={e.id} column="utilityBill" />}
                       </td>
                     )}

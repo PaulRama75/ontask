@@ -12,6 +12,7 @@ import {
   hasEmployeeDocumentGrant,
 } from "@/lib/rbac";
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
+import DocRow from "./DocRow";
 
 export const dynamic = "force-dynamic";
 
@@ -436,24 +437,9 @@ export default async function EmployeeLibraryPage({
                     <p className="text-sm text-slate-500">No files</p>
                   ) : (
                     <ul className="mt-1 space-y-1">
-                      {docs.map((d) => {
-                        const title = d.label?.trim();
-                        return (
-                          <li key={d.id}>
-                            <a
-                              href={`/api/files/${d.id}`}
-                              target="_blank"
-                              title={d.fileName}
-                              className="text-sm text-cyan-400 hover:underline"
-                            >
-                              {title && title !== d.fileName ? title : d.fileName}
-                            </a>
-                            <span className="ml-2 text-xs text-slate-500">
-                              {(d.size / 1024).toFixed(0)} KB
-                            </span>
-                          </li>
-                        );
-                      })}
+                      {docs.map((d) => (
+                        <DocRow key={d.id} employeeId={e.id} doc={d} canManage={isAdmin} />
+                      ))}
                     </ul>
                   )}
                 </div>

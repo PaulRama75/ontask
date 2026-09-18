@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { sendEmail, emailButton } from "@/lib/email";
-import { saveFile } from "@/lib/storage";
+import { saveFile, deleteFile } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 import { getCurrentUser } from "@/lib/auth";
@@ -286,6 +286,38 @@ export async function addEmployeeDocument(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/grid");
+}
+
+// Admin-only: rename an uploaded document's display file name (extra/wrongly
+// labeled attachments happen during onboarding uploads). Does not touch the
+// underlying storage key, only what's shown to users.
+export async function renameEmployeeDocument(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  const documentId = String(formData.get("documentId") ?? "");
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const fileName = String(formData.get("fileName") ?? "").trim();
+  if (!documentId || !fileName) return;
+
+  await prisma.document.update({ where: { id: documentId }, data: { fileName } });
+  revalidatePath("/admin/grid");
+  if (employeeId) revalidatePath(`/admin/employee/${employeeId}`);
+}
+
+// Admin-only: permanently remove an uploaded document (storage file + DB row).
+export async function deleteEmployeeDocument(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  const documentId = String(formData.get("documentId") ?? "");
+  const employeeId = String(formData.get("employeeId") ?? "");
+  if (!documentId) return;
+
+  const doc = await prisma.document.findUnique({ where: { id: documentId } });
+  if (!doc) return;
+  await deleteFile(doc.storageKey);
+  await prisma.document.delete({ where: { id: documentId } });
+  revalidatePath("/admin/grid");
+  if (employeeId) revalidatePath(`/admin/employee/${employeeId}`);
 }
 
 // Tri-state boolean from a form value: "true" -> true, "false" -> false, else null.

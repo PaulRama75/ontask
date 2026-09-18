@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 // Storage abstraction. LOCAL uses the filesystem (dev only — App Platform's disk
 // is ephemeral). S3 uses DigitalOcean Spaces (S3-compatible) for production.
@@ -53,6 +53,24 @@ async function s3Get(key: string): Promise<Buffer | null> {
     return Buffer.from(bytes);
   } catch {
     return null;
+  }
+}
+
+// Best-effort delete -- a missing file (already gone, or never wrote
+// successfully) is not an error; the DB row is the source of truth.
+export async function deleteFile(key: string): Promise<void> {
+  if (DRIVER === "LOCAL") {
+    try {
+      await fs.unlink(localPathFor(key));
+    } catch {
+      // already gone
+    }
+    return;
+  }
+  try {
+    await getS3Client().send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+  } catch {
+    // already gone
   }
 }
 
