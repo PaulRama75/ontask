@@ -85,13 +85,17 @@ export type AccessMap = Record<string, ColumnAccess>;
 
 // Sensible starting defaults per role (Admin can change these in the UI).
 export function defaultAccess(role: Role, columnKey: string): ColumnAccess {
-  if (role === "SUPER_ADMIN" || role === "ADMIN") {
-    return { level: "EDIT", canApprove: true };
-  }
-  // Library is locked down by default: only HR (and admins above) may open the
-  // full employee document library. Admins can grant other roles in the matrix.
+  // Library is locked down by default -- HR gets VIEW, everyone else (including
+  // plain Admins) is HIDDEN and must be granted access explicitly: via the
+  // Access Control matrix, the per-user "Document access" toggle, a
+  // per-employee grant, or a Project Lead/Manager assignment. Super Admin is
+  // the only automatic exception (getAccessMap gives it EDIT on everything,
+  // bypassing defaultAccess entirely).
   if (columnKey === "library") {
     return { level: role === "HR" ? "VIEW" : "HIDDEN", canApprove: false };
+  }
+  if (role === "SUPER_ADMIN" || role === "ADMIN") {
+    return { level: "EDIT", canApprove: true };
   }
   switch (role) {
     case "PROJECT_LEAD":
