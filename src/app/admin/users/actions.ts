@@ -131,3 +131,23 @@ export async function clearOnboardingHrRecipient(): Promise<void> {
   });
   revalidatePath("/admin/users");
 }
+
+// Grants this user full view/download access to every employee's
+// documents, regardless of role. Unlike the notification recipients
+// above, this isn't a single-recipient field -- any number of users can
+// have it set at once.
+export async function grantFullDocumentAccess(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(form.get("userId") ?? "");
+  if (!id) return;
+  await prisma.user.update({ where: { id }, data: { hasFullDocumentAccess: true } });
+  revalidatePath("/admin/users");
+}
+
+export async function revokeFullDocumentAccess(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(form.get("userId") ?? "");
+  if (!id) return;
+  await prisma.user.update({ where: { id }, data: { hasFullDocumentAccess: false } });
+  revalidatePath("/admin/users");
+}

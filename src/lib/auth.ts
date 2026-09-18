@@ -24,6 +24,7 @@ export type SessionUser = {
   email: string;
   name: string | null;
   role: string;
+  hasFullDocumentAccess: boolean;
 };
 
 // Create a session row and set the cookie. Call from a server action / route.
@@ -64,5 +65,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     return null;
   }
   const u = session.user;
-  return { id: u.id, email: u.email, name: u.name, role: u.role };
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    hasFullDocumentAccess: u.hasFullDocumentAccess,
+  };
 }

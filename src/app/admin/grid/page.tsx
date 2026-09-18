@@ -92,7 +92,7 @@ export default async function GridPage({
   const show = (k: string) => canView(access, k);
   const editable = (k: string) => canEdit(access, k);
   const approvable = (k: string) => canApprove(access, k);
-  const canLibrary = canView(access, "library");
+  const canLibrary = canView(access, "library") || me.hasFullDocumentAccess;
   // Project Leads without library access can still open the employee page to
   // fill the grouped PL details form, so let them reach it from the name link.
   const canPLDetails = ["site", "hireDate", "payRate", "billRate", "frc", "creditCard", "emailNeeded"].some(

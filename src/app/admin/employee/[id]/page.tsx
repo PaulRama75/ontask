@@ -65,7 +65,7 @@ export default async function EmployeeLibraryPage({
   // case they see the same full page too (view/download only for a grant;
   // full edit for an assignment).
   const access = await getAccessMap(me.role);
-  const canLib = canView(access, "library");
+  const canLib = canView(access, "library") || me.hasFullDocumentAccess;
   const canEditPL = PL_FIELDS.some((k) => canEdit(access, k));
   const isProjectLead = me.role === "PROJECT_LEAD";
   const isProjectManager = me.role === "PROJECT_MANAGER";

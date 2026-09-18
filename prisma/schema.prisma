@@ -151,6 +151,13 @@ model User {
   // single-recipient convention as receivesInvoiceAdminEmails above.
   receivesOnboardingHrEmails Boolean @default(false)
 
+  // Per-user override granting full view/download access to every
+  // employee's documents, regardless of role -- managed from the Users
+  // page. Unlike the single-recipient fields above, any number of users
+  // may have this set at once. Equivalent to the "library" column
+  // permission, just granted to a specific person instead of a role.
+  hasFullDocumentAccess Boolean @default(false)
+
   documentGrantsReceived EmployeeDocumentGrant[] @relation("DocumentGrantUser")
   documentGrantsMade     EmployeeDocumentGrant[] @relation("DocumentGrantGrantedBy")
 }

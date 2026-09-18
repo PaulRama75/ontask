@@ -12,7 +12,9 @@ export async function GET() {
   if (!me) return new Response("Unauthorized", { status: 401 });
 
   const access = await getAccessMap(me.role);
-  if (!canView(access, "library")) return new Response("Forbidden", { status: 403 });
+  if (!canView(access, "library") && !me.hasFullDocumentAccess) {
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const documents = await prisma.document.findMany({
     include: { employee: { select: { firstName: true, lastName: true } } },

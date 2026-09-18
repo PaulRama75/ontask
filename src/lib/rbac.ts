@@ -203,16 +203,22 @@ export async function hasEmployeeDocumentGrant(userId: string, employeeId: strin
 }
 
 // Same rule enforced on the employee detail page: broad "library" access
-// sees every employee's documents; a Project Lead/Manager without it only
-// sees documents for the employee they were personally assigned to; a
-// one-off grant sees documents for that one employee regardless of role.
+// (role-wide, or a per-user hasFullDocumentAccess override) sees every
+// employee's documents; a Project Lead/Manager without it only sees
+// documents for the employee they were personally assigned to; a one-off
+// grant sees documents for that one employee regardless of role.
 export function canAccessEmployeeDocuments(
   access: AccessMap,
-  me: { role: string; email: string },
+  me: { role: string; email: string; hasFullDocumentAccess?: boolean },
   employee: { projectLeadEmail: string | null; projectManagerEmail: string | null },
   granted = false,
 ): boolean {
-  return canView(access, "library") || isAssignedProjectLeadOrManager(me, employee) || granted;
+  return (
+    canView(access, "library") ||
+    !!me.hasFullDocumentAccess ||
+    isAssignedProjectLeadOrManager(me, employee) ||
+    granted
+  );
 }
 
 // Top-level nav sections whose visibility is admin-configurable per role.

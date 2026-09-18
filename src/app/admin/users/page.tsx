@@ -10,6 +10,8 @@ import {
   clearInvoiceAdminRecipient,
   setOnboardingHrRecipient,
   clearOnboardingHrRecipient,
+  grantFullDocumentAccess,
+  revokeFullDocumentAccess,
   deleteUser,
 } from "./actions";
 import NewUserForm from "./NewUserForm";
@@ -60,6 +62,12 @@ export default async function UsersPage() {
         user below to designate a single recipient instead.
       </section>
 
+      <section className="mt-4 rounded-lg border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-400 shadow-lg shadow-black/30 backdrop-blur">
+        "Document access" gives a specific person full view/download access to every employee's
+        documents, regardless of their role -- unlike the notification settings above, any number of
+        people can have this on at once.
+      </section>
+
       <section className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
@@ -70,6 +78,7 @@ export default async function UsersPage() {
               <th className="px-4 py-3">Active</th>
               <th className="px-4 py-3">Invoice notifications</th>
               <th className="px-4 py-3">Onboarding notifications</th>
+              <th className="px-4 py-3">Document access</th>
               {isAdminRole(me.role) && <th className="px-4 py-3"></th>}
             </tr>
           </thead>
@@ -160,6 +169,24 @@ export default async function UsersPage() {
                     )
                   ) : (
                     <span className="text-xs text-slate-600">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {u.hasFullDocumentAccess ? (
+                    <form action={revokeFullDocumentAccess} className="flex items-center gap-2">
+                      <input type="hidden" name="userId" value={u.id} />
+                      <span className="rounded-md bg-cyan-500/15 px-2 py-1 text-xs font-semibold text-cyan-300">
+                        Granted
+                      </span>
+                      <button className="text-xs text-slate-400 hover:underline">Revoke</button>
+                    </form>
+                  ) : (
+                    <form action={grantFullDocumentAccess}>
+                      <input type="hidden" name="userId" value={u.id} />
+                      <button className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5">
+                        Grant
+                      </button>
+                    </form>
                   )}
                 </td>
                 {isAdminRole(me.role) && (
