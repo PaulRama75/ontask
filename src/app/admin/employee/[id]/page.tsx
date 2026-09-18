@@ -3,8 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canView, canEdit, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
-import { saveProjectLeadDetails } from "../../actions";
+import {
+  getAccessMap,
+  canView,
+  canEdit,
+  isAdminRole,
+  isAssignedProjectLeadOrManager,
+  hasEmployeeDocumentGrant,
+} from "@/lib/rbac";
+import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -50,17 +57,23 @@ export default async function EmployeeLibraryPage({
   const me = await getCurrentUser();
   if (!me) redirect("/login");
 
+  const { id } = await params;
+
   // Access: the full library (PII + documents) requires the "library"
   // permission -- OR being the Project Lead/Manager personally assigned to
-  // this specific employee, in which case they see the same full page too.
+  // this specific employee -- OR a one-off Admin-granted share -- in which
+  // case they see the same full page too (view/download only for a grant;
+  // full edit for an assignment).
   const access = await getAccessMap(me.role);
   const canLib = canView(access, "library");
   const canEditPL = PL_FIELDS.some((k) => canEdit(access, k));
   const isProjectLead = me.role === "PROJECT_LEAD";
   const isProjectManager = me.role === "PROJECT_MANAGER";
-  if (!canLib && !canEditPL && !isProjectLead && !isProjectManager) redirect("/admin/grid");
+  const granted = canLib ? false : await hasEmployeeDocumentGrant(me.id, id);
+  if (!canLib && !canEditPL && !isProjectLead && !isProjectManager && !granted) {
+    redirect("/admin/grid");
+  }
 
-  const { id } = await params;
   const e = await prisma.employee.findUnique({
     where: { id },
     include: { documents: { orderBy: { createdAt: "asc" } }, certifications: true },
@@ -71,15 +84,16 @@ export default async function EmployeeLibraryPage({
   // open employees they were personally assigned to at link creation -- as
   // either the Project Lead or the Project Manager (a person's current role
   // doesn't always match which dropdown they were picked from) -- not every
-  // employee in the system. Once confirmed assigned, they get the full page.
+  // employee in the system, unless they also hold a one-off grant.
   const assignedToMe = isAssignedProjectLeadOrManager(me, e);
-  if (!canLib && (isProjectLead || isProjectManager) && !assignedToMe) {
+  if (!canLib && (isProjectLead || isProjectManager) && !assignedToMe && !granted) {
     redirect("/admin/grid");
   }
-  const canFullView = canLib || assignedToMe;
+  const canFullView = canLib || assignedToMe || granted;
   // A Project Lead/Manager assigned to this employee gets full edit rights
   // on the PL details form for them, same as a Super Admin would -- not
-  // just whatever the role-wide Access Control matrix happens to grant.
+  // just whatever the role-wide Access Control matrix happens to grant. A
+  // one-off grant is view/download only and never implies edit rights.
   const canEditThis = canEditPL || assignedToMe;
 
   // Site-level access: a restricted non-admin can't open employees outside their sites.
@@ -95,6 +109,23 @@ export default async function EmployeeLibraryPage({
 
   const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || "Unnamed employee";
   const docsByCategory = (cat: string) => e.documents.filter((d) => d.category === cat);
+
+  // Admin-only: manage one-off document-access shares for this employee.
+  const isAdmin = isAdminRole(me.role);
+  const existingGrants = isAdmin
+    ? await prisma.employeeDocumentGrant.findMany({
+        where: { employeeId: id },
+        include: { user: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const grantableUsers = isAdmin
+    ? await prisma.user.findMany({
+        where: { active: true, id: { notIn: existingGrants.map((g) => g.userId) } },
+        select: { id: true, name: true, email: true, role: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   return (
     <main className="min-h-screen py-10">
@@ -446,6 +477,54 @@ export default async function EmployeeLibraryPage({
           </section>
         )}
         </>
+        )}
+
+        {isAdmin && (
+          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Shared with</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Give one specific person view/download access to this employee&apos;s documents, regardless
+              of their role. This never grants edit access.
+            </p>
+
+            {existingGrants.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {existingGrants.map((g) => (
+                  <li key={g.id} className="flex items-center justify-between text-sm">
+                    <span className="text-white">{g.user.name || g.user.email}</span>
+                    <form action={revokeDocumentAccess}>
+                      <input type="hidden" name="employeeId" value={id} />
+                      <input type="hidden" name="userId" value={g.userId} />
+                      <button className="text-xs text-rose-300 hover:underline">Revoke</button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {grantableUsers.length > 0 ? (
+              <form action={grantDocumentAccess} className="mt-4 flex items-center gap-2">
+                <input type="hidden" name="employeeId" value={id} />
+                <select name="userId" defaultValue="" required className={inputCls}>
+                  <option value="" disabled>
+                    Choose a person…
+                  </option>
+                  {grantableUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name ? `${u.name} (${u.email})` : u.email} · {u.role}
+                    </option>
+                  ))}
+                </select>
+                <button className="whitespace-nowrap rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5">
+                  Grant access
+                </button>
+              </form>
+            ) : (
+              existingGrants.length === 0 && (
+                <p className="mt-3 text-sm text-slate-500">No other active users to share with.</p>
+              )
+            )}
+          </section>
         )}
       </div>
     </main>

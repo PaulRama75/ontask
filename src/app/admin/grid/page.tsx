@@ -102,8 +102,17 @@ export default async function GridPage({
   // link for employees they were personally assigned to -- matching the
   // same rule enforced on the employee detail page itself.
   const meAuth = { role: me.role, email: me.email };
-  function canOpenDetailsFor(e: { projectLeadEmail: string | null; projectManagerEmail: string | null }) {
-    return canLibrary || canPLDetails || isAssignedProjectLeadOrManager(meAuth, e);
+  // One-off Admin-granted shares (EmployeeDocumentGrant) also unlock the
+  // details link, same as being the assigned Project Lead/Manager.
+  const grantedEmployeeIds = canLibrary
+    ? new Set<string>()
+    : new Set(
+        (await prisma.employeeDocumentGrant.findMany({ where: { userId: me.id }, select: { employeeId: true } })).map(
+          (g) => g.employeeId,
+        ),
+      );
+  function canOpenDetailsFor(e: { id: string; projectLeadEmail: string | null; projectManagerEmail: string | null }) {
+    return canLibrary || canPLDetails || isAssignedProjectLeadOrManager(meAuth, e) || grantedEmployeeIds.has(e.id);
   }
 
   const { q = "", status = "all", archived: archivedParam } = await searchParams;

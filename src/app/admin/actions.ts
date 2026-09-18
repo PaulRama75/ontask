@@ -441,3 +441,32 @@ export async function deleteEmployee(formData: FormData): Promise<void> {
   revalidatePath("/admin");
   revalidatePath("/admin/grid");
 }
+
+// Admin-only one-off share: lets a specific user view/download one
+// employee's documents regardless of their role's default access or any
+// Project Lead/Manager assignment. Never implies edit rights.
+export async function grantDocumentAccess(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  if (!employeeId || !userId) return;
+
+  await prisma.employeeDocumentGrant.upsert({
+    where: { employeeId_userId: { employeeId, userId } },
+    update: {},
+    create: { employeeId, userId, grantedById: me.id },
+  });
+  revalidatePath(`/admin/employee/${employeeId}`);
+}
+
+export async function revokeDocumentAccess(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  if (!employeeId || !userId) return;
+
+  await prisma.employeeDocumentGrant.deleteMany({ where: { employeeId, userId } });
+  revalidatePath(`/admin/employee/${employeeId}`);
+}

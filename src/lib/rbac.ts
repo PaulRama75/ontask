@@ -192,15 +192,27 @@ export function isAssignedProjectLeadOrManager(
   );
 }
 
+// A one-off grant (Admin-only, EmployeeDocumentGrant table) letting a
+// specific user view/download one employee's documents regardless of role.
+// View/download only -- never implies edit rights.
+export async function hasEmployeeDocumentGrant(userId: string, employeeId: string): Promise<boolean> {
+  const grant = await prisma.employeeDocumentGrant.findUnique({
+    where: { employeeId_userId: { employeeId, userId } },
+  });
+  return !!grant;
+}
+
 // Same rule enforced on the employee detail page: broad "library" access
 // sees every employee's documents; a Project Lead/Manager without it only
-// sees documents for the employee they were personally assigned to.
+// sees documents for the employee they were personally assigned to; a
+// one-off grant sees documents for that one employee regardless of role.
 export function canAccessEmployeeDocuments(
   access: AccessMap,
   me: { role: string; email: string },
   employee: { projectLeadEmail: string | null; projectManagerEmail: string | null },
+  granted = false,
 ): boolean {
-  return canView(access, "library") || isAssignedProjectLeadOrManager(me, employee);
+  return canView(access, "library") || isAssignedProjectLeadOrManager(me, employee) || granted;
 }
 
 // Top-level nav sections whose visibility is admin-configurable per role.

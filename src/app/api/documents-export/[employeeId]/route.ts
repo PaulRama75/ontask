@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
 import { getFile } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canAccessEmployeeDocuments } from "@/lib/rbac";
+import { getAccessMap, canAccessEmployeeDocuments, hasEmployeeDocumentGrant } from "@/lib/rbac";
 
 // Zips just one employee's uploaded documents -- same permission as the
 // all-employees export, and as opening that employee's document library
@@ -23,7 +23,8 @@ export async function GET(
   if (!employee) return new Response("Not found", { status: 404 });
 
   const access = await getAccessMap(me.role);
-  if (!canAccessEmployeeDocuments(access, me, employee)) {
+  const granted = await hasEmployeeDocumentGrant(me.id, employeeId);
+  if (!canAccessEmployeeDocuments(access, me, employee, granted)) {
     return new Response("Forbidden", { status: 403 });
   }
 

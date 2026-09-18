@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getFile } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canAccessEmployeeDocuments } from "@/lib/rbac";
+import { getAccessMap, canAccessEmployeeDocuments, hasEmployeeDocumentGrant } from "@/lib/rbac";
 
 // Serves an uploaded employee document. Same permission as opening the
 // employee's document library page and the zip exports -- one gate for
@@ -21,7 +21,8 @@ export async function GET(
   if (!doc) return new Response("Not found", { status: 404 });
 
   const access = await getAccessMap(me.role);
-  if (!canAccessEmployeeDocuments(access, me, doc.employee)) {
+  const granted = await hasEmployeeDocumentGrant(me.id, doc.employeeId);
+  if (!canAccessEmployeeDocuments(access, me, doc.employee, granted)) {
     return new Response("Forbidden", { status: 403 });
   }
 

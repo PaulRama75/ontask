@@ -97,6 +97,7 @@ model Employee {
   certifications Certification[]
   documents      Document[]
   onboardingLink OnboardingLink?
+  documentGrants EmployeeDocumentGrant[]
 }
 
 // Multiple certifications per employee.
@@ -149,6 +150,26 @@ model User {
   // falling back to every active HR user if nobody's designated. Same
   // single-recipient convention as receivesInvoiceAdminEmails above.
   receivesOnboardingHrEmails Boolean @default(false)
+
+  documentGrantsReceived EmployeeDocumentGrant[] @relation("DocumentGrantUser")
+  documentGrantsMade     EmployeeDocumentGrant[] @relation("DocumentGrantGrantedBy")
+}
+
+// A one-off grant letting a specific user view/download one employee's
+// documents (Details + Documents section on the employee page), independent
+// of their role's default access or any Project Lead/Manager assignment.
+// View/download only -- never implies edit rights on that employee.
+model EmployeeDocumentGrant {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation("DocumentGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedById String
+  grantedBy   User     @relation("DocumentGrantGrantedBy", fields: [grantedById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([employeeId, userId])
 }
 
 // Site-level (row) access. A non-admin user with one or more UserSite rows is
