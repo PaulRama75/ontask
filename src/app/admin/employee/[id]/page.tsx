@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canView, canEdit, isAdminRole } from "@/lib/rbac";
+import { getAccessMap, canView, canEdit, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { saveProjectLeadDetails } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -50,10 +50,9 @@ export default async function EmployeeLibraryPage({
   const me = await getCurrentUser();
   if (!me) redirect("/login");
 
-  // Access: the full library (PII + documents) requires the "library" permission.
-  // A Project Lead who can edit any PL field, or a Project Manager, may open
-  // the page to fill/view those fields, but the sensitive sections stay
-  // hidden from them.
+  // Access: the full library (PII + documents) requires the "library"
+  // permission -- OR being the Project Lead/Manager personally assigned to
+  // this specific employee, in which case they see the same full page too.
   const access = await getAccessMap(me.role);
   const canLib = canView(access, "library");
   const canEditPL = PL_FIELDS.some((k) => canEdit(access, k));
@@ -68,17 +67,20 @@ export default async function EmployeeLibraryPage({
   });
   if (!e) notFound();
 
-  // A Project Lead/Manager without full library access may only open
-  // employees they were personally assigned to at link creation -- as either
-  // the Project Lead or the Project Manager (a person's current role doesn't
-  // always match which dropdown they were picked from) -- not every
-  // employee in the system.
-  if (!canLib && (isProjectLead || isProjectManager)) {
-    const myEmail = me.email.toLowerCase();
-    const assigned =
-      e.projectLeadEmail?.toLowerCase() === myEmail || e.projectManagerEmail?.toLowerCase() === myEmail;
-    if (!assigned) redirect("/admin/grid");
+  // A Project Lead/Manager without the broad "library" permission may only
+  // open employees they were personally assigned to at link creation -- as
+  // either the Project Lead or the Project Manager (a person's current role
+  // doesn't always match which dropdown they were picked from) -- not every
+  // employee in the system. Once confirmed assigned, they get the full page.
+  const assignedToMe = isAssignedProjectLeadOrManager(me, e);
+  if (!canLib && (isProjectLead || isProjectManager) && !assignedToMe) {
+    redirect("/admin/grid");
   }
+  const canFullView = canLib || assignedToMe;
+  // A Project Lead/Manager assigned to this employee gets full edit rights
+  // on the PL details form for them, same as a Super Admin would -- not
+  // just whatever the role-wide Access Control matrix happens to grant.
+  const canEditThis = canEditPL || assignedToMe;
 
   // Site-level access: a restricted non-admin can't open employees outside their sites.
   if (!isAdminRole(me.role)) {
@@ -102,10 +104,10 @@ export default async function EmployeeLibraryPage({
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-white">{name}</h1>
         <p className="text-sm text-slate-400">
-          {canLib ? "Document library" : "Project Lead details"} · status {e.status}
+          {canFullView ? "Document library" : "Project Lead details"} · status {e.status}
         </p>
 
-        {(canLib || canEditPL || isProjectLead || isProjectManager) && (
+        {(canFullView || canEditThis) && (
           <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
             <h2 className="text-lg font-semibold text-white">Project Lead Details</h2>
             <p className="mt-1 text-xs text-slate-400">
@@ -116,7 +118,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "site") && (
                 <PLField label="Site">
-                  {canEdit(access, "site") ? (
+                  {(canEdit(access, "site") || canEditThis) ? (
                     <input name="site" defaultValue={e.site ?? ""} className={inputCls} />
                   ) : (
                     <ReadOnly value={e.site} />
@@ -126,7 +128,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "hireDate") && (
                 <PLField label="Hire Date">
-                  {canEdit(access, "hireDate") ? (
+                  {(canEdit(access, "hireDate") || canEditThis) ? (
                     <input type="date" name="hireDate" defaultValue={dateInputValue(e.hireDate)} className={inputCls} />
                   ) : (
                     <ReadOnly value={fmtDate(e.hireDate)} />
@@ -136,7 +138,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "payRate") && (
                 <PLField label="Pay Rate">
-                  {canEdit(access, "payRate") ? (
+                  {(canEdit(access, "payRate") || canEditThis) ? (
                     <input type="number" step="0.01" min="0" name="payRate" defaultValue={e.payRate ?? ""} className={inputCls} />
                   ) : (
                     <ReadOnly value={e.payRate != null ? `$${e.payRate.toFixed(2)}` : null} />
@@ -146,7 +148,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "billRate") && (
                 <PLField label="Bill Rate">
-                  {canEdit(access, "billRate") ? (
+                  {(canEdit(access, "billRate") || canEditThis) ? (
                     <input type="number" step="0.01" min="0" name="billRate" defaultValue={e.billRate ?? ""} className={inputCls} />
                   ) : (
                     <ReadOnly value={e.billRate != null ? `$${e.billRate.toFixed(2)}` : null} />
@@ -156,7 +158,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "frc") && (
                 <PLField label="FRC Needed / Size">
-                  {canEdit(access, "frc") ? (
+                  {(canEdit(access, "frc") || canEditThis) ? (
                     <div className="flex gap-2">
                       <select name="frcNeeded" defaultValue={triValue(e.frcNeeded)} className={inputCls}>
                         <option value="">—</option>
@@ -181,7 +183,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "creditCard") && (
                 <PLField label="Credit Card Approved">
-                  {canEdit(access, "creditCard") ? (
+                  {(canEdit(access, "creditCard") || canEditThis) ? (
                     <select name="creditCardApproved" defaultValue={triValue(e.creditCardApproved)} className={inputCls}>
                       <option value="">—</option>
                       <option value="true">Yes</option>
@@ -195,7 +197,7 @@ export default async function EmployeeLibraryPage({
 
               {canView(access, "emailNeeded") && (
                 <PLField label="Email Needed">
-                  {canEdit(access, "emailNeeded") ? (
+                  {(canEdit(access, "emailNeeded") || canEditThis) ? (
                     <select name="emailNeeded" defaultValue={triValue(e.emailNeeded)} className={inputCls}>
                       <option value="">—</option>
                       <option value="true">Yes</option>
@@ -207,10 +209,10 @@ export default async function EmployeeLibraryPage({
                 </PLField>
               )}
 
-              {(canEditPL || canLib) && (
+              {(canEditThis || canFullView) && (
                 <>
                   <PLField label="Urgency">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <select name="urgency" defaultValue={e.urgency ?? ""} className={inputCls}>
                         <option value="">—</option>
                         <option value="URGENT">Urgent</option>
@@ -223,7 +225,7 @@ export default async function EmployeeLibraryPage({
 
                   <div className="sm:col-span-2">
                     <PLField label="Employment Type">
-                      {canEditPL ? (
+                      {canEditThis ? (
                         <CheckboxGroup
                           name="employmentType"
                           options={EMPLOYMENT_TYPE_OPTIONS}
@@ -237,7 +239,7 @@ export default async function EmployeeLibraryPage({
 
                   <div className="sm:col-span-2">
                     <PLField label="Position Type">
-                      {canEditPL ? (
+                      {canEditThis ? (
                         <CheckboxGroup
                           name="positionType"
                           options={POSITION_TYPE_OPTIONS}
@@ -250,7 +252,7 @@ export default async function EmployeeLibraryPage({
                   </div>
 
                   <PLField label="Direct Supervisor">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <input name="directSupervisor" defaultValue={e.directSupervisor ?? ""} className={inputCls} />
                     ) : (
                       <ReadOnly value={e.directSupervisor} />
@@ -258,7 +260,7 @@ export default async function EmployeeLibraryPage({
                   </PLField>
 
                   <PLField label="Job Number">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <input name="jobNumber" defaultValue={e.jobNumber ?? ""} className={inputCls} />
                     ) : (
                       <ReadOnly value={e.jobNumber} />
@@ -266,7 +268,7 @@ export default async function EmployeeLibraryPage({
                   </PLField>
 
                   <PLField label="Job Site">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <input name="jobSite" defaultValue={e.jobSite ?? ""} className={inputCls} />
                     ) : (
                       <ReadOnly value={e.jobSite} />
@@ -274,7 +276,7 @@ export default async function EmployeeLibraryPage({
                   </PLField>
 
                   <PLField label="Driving Record Required">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <select name="drivingRecordRequired" defaultValue={triValue(e.drivingRecordRequired)} className={inputCls}>
                         <option value="">—</option>
                         <option value="true">Yes</option>
@@ -286,7 +288,7 @@ export default async function EmployeeLibraryPage({
                   </PLField>
 
                   <PLField label="Current Lift Operator Certifications (if applicable)">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <input name="liftOperatorCertifications" defaultValue={e.liftOperatorCertifications ?? ""} className={inputCls} />
                     ) : (
                       <ReadOnly value={e.liftOperatorCertifications} />
@@ -294,7 +296,7 @@ export default async function EmployeeLibraryPage({
                   </PLField>
 
                   <PLField label="Site Specifics Needed">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <select name="siteSpecificsNeeded" defaultValue={triValue(e.siteSpecificsNeeded)} className={inputCls}>
                         <option value="">—</option>
                         <option value="true">Yes</option>
@@ -306,7 +308,7 @@ export default async function EmployeeLibraryPage({
                   </PLField>
 
                   <PLField label="Fit Test Needed">
-                    {canEditPL ? (
+                    {canEditThis ? (
                       <select name="fitTestNeeded" defaultValue={triValue(e.fitTestNeeded)} className={inputCls}>
                         <option value="">—</option>
                         <option value="true">Yes</option>
@@ -319,7 +321,7 @@ export default async function EmployeeLibraryPage({
 
                   <div className="sm:col-span-2">
                     <PLField label="Additional Trainings Needed">
-                      {canEditPL ? (
+                      {canEditThis ? (
                         <textarea name="additionalTrainingsNeeded" defaultValue={e.additionalTrainingsNeeded ?? ""} rows={2} className={inputCls} />
                       ) : (
                         <ReadOnly value={e.additionalTrainingsNeeded} />
@@ -329,7 +331,7 @@ export default async function EmployeeLibraryPage({
 
                   <div className="sm:col-span-2">
                     <PLField label="Safety Equipment Needed">
-                      {canEditPL ? (
+                      {canEditThis ? (
                         <CheckboxGroup
                           name="safetyEquipmentNeeded"
                           options={SAFETY_EQUIPMENT_OPTIONS}
@@ -343,7 +345,7 @@ export default async function EmployeeLibraryPage({
 
                   <div className="sm:col-span-2">
                     <PLField label="Additional Equipment Needs (e.g. UT Kit)">
-                      {canEditPL ? (
+                      {canEditThis ? (
                         <input name="additionalEquipmentNeeds" defaultValue={e.additionalEquipmentNeeds ?? ""} className={inputCls} />
                       ) : (
                         <ReadOnly value={e.additionalEquipmentNeeds} />
@@ -353,7 +355,7 @@ export default async function EmployeeLibraryPage({
                 </>
               )}
 
-              {canEditPL && (
+              {canEditThis && (
                 <div className="sm:col-span-2">
                   <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
                     Save details
@@ -364,7 +366,7 @@ export default async function EmployeeLibraryPage({
           </section>
         )}
 
-        {canLib && (
+        {canFullView && (
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">Details</h2>
           <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -379,7 +381,7 @@ export default async function EmployeeLibraryPage({
         </section>
         )}
 
-        {canLib && (
+        {canFullView && (
         <>
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <div className="flex items-center justify-between">

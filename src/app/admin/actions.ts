@@ -6,7 +6,7 @@ import { saveFile } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canEdit, canApprove, isAdminRole } from "@/lib/rbac";
+import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
 const ALLOWED_MIME = new Set([
@@ -336,6 +336,17 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
   if (!id) return;
   const access = await getAccessMap(me.role);
 
+  // A Project Lead/Manager assigned to this employee gets full edit rights
+  // on their PL details, same as the role-wide Access Control matrix would
+  // grant -- matches the same rule enforced when the form is rendered.
+  const employee = await prisma.employee.findUnique({
+    where: { id },
+    select: { projectLeadEmail: true, projectManagerEmail: true },
+  });
+  if (!employee) return;
+  const assignedToMe = isAssignedProjectLeadOrManager(me, employee);
+  const editable = (key: string) => canEdit(access, key) || assignedToMe;
+
   const s = (k: string) => String(formData.get(k) ?? "").trim();
   const numOrNull = (v: string) => {
     const n = v === "" ? null : Number(v);
@@ -348,22 +359,23 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
   };
 
   const data: Record<string, unknown> = {};
-  if (canEdit(access, "site")) data.site = s("site") || null;
-  if (canEdit(access, "hireDate")) data.hireDate = dateOrNull(s("hireDate"));
-  if (canEdit(access, "payRate")) data.payRate = numOrNull(s("payRate"));
-  if (canEdit(access, "billRate")) data.billRate = numOrNull(s("billRate"));
-  if (canEdit(access, "frc")) {
+  if (editable("site")) data.site = s("site") || null;
+  if (editable("hireDate")) data.hireDate = dateOrNull(s("hireDate"));
+  if (editable("payRate")) data.payRate = numOrNull(s("payRate"));
+  if (editable("billRate")) data.billRate = numOrNull(s("billRate"));
+  if (editable("frc")) {
     data.frcNeeded = triBool(s("frcNeeded"));
     data.frcSize = s("frcSize") || null;
   }
-  if (canEdit(access, "creditCard")) data.creditCardApproved = triBool(s("creditCardApproved"));
-  if (canEdit(access, "emailNeeded")) data.emailNeeded = triBool(s("emailNeeded"));
+  if (editable("creditCard")) data.creditCardApproved = triBool(s("creditCardApproved"));
+  if (editable("emailNeeded")) data.emailNeeded = triBool(s("emailNeeded"));
 
   // Job assignment fields aren't individually access-controlled -- they're one
   // cohesive block, gated the same way the section itself is: anyone who can
-  // edit at least one existing PL field can edit all of these too.
+  // edit at least one existing PL field (or is personally assigned) can edit
+  // all of these too.
   const canEditPL = ["site", "hireDate", "payRate", "billRate", "frc", "creditCard", "emailNeeded"].some(
-    (k) => canEdit(access, k),
+    (k) => editable(k),
   );
   if (canEditPL) {
     const csv = (key: string) => formData.getAll(key).map(String).join(", ") || null;

@@ -2,11 +2,12 @@ import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
 import { getFile } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canView } from "@/lib/rbac";
+import { getAccessMap, canAccessEmployeeDocuments } from "@/lib/rbac";
 
-// Zips just one employee's uploaded documents -- same "library" permission
-// as the all-employees export, and as opening that employee's document
-// library page.
+// Zips just one employee's uploaded documents -- same permission as the
+// all-employees export, and as opening that employee's document library
+// page (broad "library" access, or the Project Lead/Manager assigned to
+// this specific employee).
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ employeeId: string }> },
@@ -14,15 +15,17 @@ export async function GET(
   const me = await getCurrentUser();
   if (!me) return new Response("Unauthorized", { status: 401 });
 
-  const access = await getAccessMap(me.role);
-  if (!canView(access, "library")) return new Response("Forbidden", { status: 403 });
-
   const { employeeId } = await params;
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { firstName: true, lastName: true },
+    select: { firstName: true, lastName: true, projectLeadEmail: true, projectManagerEmail: true },
   });
   if (!employee) return new Response("Not found", { status: 404 });
+
+  const access = await getAccessMap(me.role);
+  if (!canAccessEmployeeDocuments(access, me, employee)) {
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const documents = await prisma.document.findMany({
     where: { employeeId },

@@ -11,6 +11,7 @@ import {
   getNavAccess,
   firstAllowedNavHref,
   getRestrictedSites,
+  isAssignedProjectLeadOrManager,
 } from "@/lib/rbac";
 import { setApproved, setHrReviewed, setActive, setArchived } from "../actions";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
@@ -97,17 +98,12 @@ export default async function GridPage({
   const canPLDetails = ["site", "hireDate", "payRate", "billRate", "frc", "creditCard", "emailNeeded"].some(
     (k) => canEdit(access, k),
   );
-  const isProjectLead = me.role === "PROJECT_LEAD";
-  const isProjectManager = me.role === "PROJECT_MANAGER";
   // A Project Lead/Manager without full library access only gets a details
-  // link for employees they were personally assigned to -- as either the
-  // Project Lead or the Project Manager -- matching the same rule enforced
-  // on the employee detail page itself.
-  const myEmail = me.email.toLowerCase();
+  // link for employees they were personally assigned to -- matching the
+  // same rule enforced on the employee detail page itself.
+  const meAuth = { role: me.role, email: me.email };
   function canOpenDetailsFor(e: { projectLeadEmail: string | null; projectManagerEmail: string | null }) {
-    if (canLibrary || canPLDetails) return true;
-    if (!isProjectLead && !isProjectManager) return false;
-    return e.projectLeadEmail?.toLowerCase() === myEmail || e.projectManagerEmail?.toLowerCase() === myEmail;
+    return canLibrary || canPLDetails || isAssignedProjectLeadOrManager(meAuth, e);
   }
 
   const { q = "", status = "all", archived: archivedParam } = await searchParams;

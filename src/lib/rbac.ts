@@ -177,6 +177,32 @@ export function canApprove(a: AccessMap, key: string): boolean {
   return !!a[key]?.canApprove;
 }
 
+// True if this user is the Project Lead or Project Manager assigned to this
+// specific employee (as either field -- a person's current role doesn't
+// always match which dropdown they were picked from at link creation).
+export function isAssignedProjectLeadOrManager(
+  me: { role: string; email: string },
+  employee: { projectLeadEmail: string | null; projectManagerEmail: string | null },
+): boolean {
+  if (me.role !== "PROJECT_LEAD" && me.role !== "PROJECT_MANAGER") return false;
+  const myEmail = me.email.toLowerCase();
+  return (
+    employee.projectLeadEmail?.toLowerCase() === myEmail ||
+    employee.projectManagerEmail?.toLowerCase() === myEmail
+  );
+}
+
+// Same rule enforced on the employee detail page: broad "library" access
+// sees every employee's documents; a Project Lead/Manager without it only
+// sees documents for the employee they were personally assigned to.
+export function canAccessEmployeeDocuments(
+  access: AccessMap,
+  me: { role: string; email: string },
+  employee: { projectLeadEmail: string | null; projectManagerEmail: string | null },
+): boolean {
+  return canView(access, "library") || isAssignedProjectLeadOrManager(me, employee);
+}
+
 // Top-level nav sections whose visibility is admin-configurable per role.
 // Users / Access Control / Site Access are NOT here — those stay hardcoded
 // admin-only in the layout, so an admin can never lock themselves out of
