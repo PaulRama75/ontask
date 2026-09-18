@@ -69,15 +69,15 @@ export default async function EmployeeLibraryPage({
   if (!e) notFound();
 
   // A Project Lead/Manager without full library access may only open
-  // employees they were personally assigned as the Project Lead/Manager for
-  // at link creation -- not every employee in the system.
-  if (!canLib) {
-    if (isProjectLead && e.projectLeadEmail?.toLowerCase() !== me.email.toLowerCase()) {
-      redirect("/admin/grid");
-    }
-    if (isProjectManager && e.projectManagerEmail?.toLowerCase() !== me.email.toLowerCase()) {
-      redirect("/admin/grid");
-    }
+  // employees they were personally assigned to at link creation -- as either
+  // the Project Lead or the Project Manager (a person's current role doesn't
+  // always match which dropdown they were picked from) -- not every
+  // employee in the system.
+  if (!canLib && (isProjectLead || isProjectManager)) {
+    const myEmail = me.email.toLowerCase();
+    const assigned =
+      e.projectLeadEmail?.toLowerCase() === myEmail || e.projectManagerEmail?.toLowerCase() === myEmail;
+    if (!assigned) redirect("/admin/grid");
   }
 
   // Site-level access: a restricted non-admin can't open employees outside their sites.

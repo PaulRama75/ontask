@@ -97,7 +97,18 @@ export default async function GridPage({
   const canPLDetails = ["site", "hireDate", "payRate", "billRate", "frc", "creditCard", "emailNeeded"].some(
     (k) => canEdit(access, k),
   );
-  const canOpenDetails = canLibrary || canPLDetails;
+  const isProjectLead = me.role === "PROJECT_LEAD";
+  const isProjectManager = me.role === "PROJECT_MANAGER";
+  // A Project Lead/Manager without full library access only gets a details
+  // link for employees they were personally assigned to -- as either the
+  // Project Lead or the Project Manager -- matching the same rule enforced
+  // on the employee detail page itself.
+  const myEmail = me.email.toLowerCase();
+  function canOpenDetailsFor(e: { projectLeadEmail: string | null; projectManagerEmail: string | null }) {
+    if (canLibrary || canPLDetails) return true;
+    if (!isProjectLead && !isProjectManager) return false;
+    return e.projectLeadEmail?.toLowerCase() === myEmail || e.projectManagerEmail?.toLowerCase() === myEmail;
+  }
 
   const { q = "", status = "all", archived: archivedParam } = await searchParams;
   const showArchived = archivedParam === "1";
@@ -269,9 +280,9 @@ export default async function GridPage({
                             id={e.id}
                             firstName={e.firstName}
                             lastName={e.lastName}
-                            canOpenLibrary={canOpenDetails}
+                            canOpenLibrary={canOpenDetailsFor(e)}
                           />
-                        ) : canOpenDetails ? (
+                        ) : canOpenDetailsFor(e) ? (
                           <Link href={`/admin/employee/${e.id}`} className="text-cyan-400 hover:underline">
                             {name}
                           </Link>
