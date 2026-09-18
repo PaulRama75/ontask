@@ -68,8 +68,8 @@ export default async function UsersPage() {
         people can have this on at once.
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
-        <table className="w-full text-left text-sm">
+      <section className="mt-6 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Name</th>
