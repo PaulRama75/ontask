@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 import { getCurrentUser } from "@/lib/auth";
 import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
+import { notifyFlagTransitions, notifyProjectLeadDetailsSaved } from "@/lib/notifications";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
 const ALLOWED_MIME = new Set([
@@ -46,6 +47,7 @@ export async function createOnboardingLink(form: FormData): Promise<void> {
       email,
       projectLeadEmail,
       projectManagerEmail,
+      createdById: me.id,
       status: "DRAFT",
       source: "LINK",
     },
@@ -74,19 +76,32 @@ ${emailButton(url, "Complete Onboarding")}
 async function requireColumn(
   columnKey: string,
   mode: "edit" | "approve",
+  employeeId?: string,
 ): Promise<void> {
   const me = await getCurrentUser();
   if (!me) throw new Error("Not authenticated");
   const access = await getAccessMap(me.role);
   const ok = mode === "approve" ? canApprove(access, columnKey) : canEdit(access, columnKey);
   if (!ok) throw new Error("Not authorized for this column");
+
+  // Project Leads/Managers may only touch employees they created or are
+  // assigned to -- same scope the data grid shows them.
+  if (employeeId && (me.role === "PROJECT_LEAD" || me.role === "PROJECT_MANAGER")) {
+    const e = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { projectLeadEmail: true, projectManagerEmail: true, createdById: true },
+    });
+    if (!e || !isAssignedProjectLeadOrManager(me, e)) {
+      throw new Error("Not authorized for this employee");
+    }
+  }
 }
 
 // Toggle overall approval for an employee. Phase 3 replaces this with
 // per-column approval by the responsible role.
 export async function setApproved(formData: FormData): Promise<void> {
-  await requireColumn("approved", "approve");
   const id = String(formData.get("employeeId") ?? "");
+  if (id) await requireColumn("approved", "approve", id);
   const approved = String(formData.get("approved") ?? "") === "true";
   if (!id) return;
 
@@ -106,8 +121,8 @@ export async function setApproved(formData: FormData): Promise<void> {
 // never clobbers RATES_ASSIGNED/APPROVED, so a later un-check doesn't undo
 // progress that's already moved on.
 export async function setHrReviewed(formData: FormData): Promise<void> {
-  await requireColumn("hrReviewed", "approve");
   const id = String(formData.get("employeeId") ?? "");
+  if (id) await requireColumn("hrReviewed", "approve", id);
   const reviewed = String(formData.get("hrReviewed") ?? "") === "true";
   if (!id) return;
 
@@ -130,8 +145,8 @@ export async function setHrReviewed(formData: FormData): Promise<void> {
 
 // Project Lead: set the employee's job site.
 export async function setSite(formData: FormData): Promise<void> {
-  await requireColumn("site", "edit");
   const id = String(formData.get("employeeId") ?? "");
+  if (id) await requireColumn("site", "edit", id);
   if (!id) return;
   const site = String(formData.get("site") ?? "").trim();
   await prisma.employee.update({
@@ -170,7 +185,7 @@ export async function setRate(formData: FormData): Promise<void> {
   const id = String(formData.get("employeeId") ?? "");
   const field = String(formData.get("field") ?? "");
   if (!id || (field !== "payRate" && field !== "billRate")) return;
-  await requireColumn(field, "edit");
+  await requireColumn(field, "edit", id);
   const raw = String(formData.get("value") ?? "").trim();
   const parsed = raw === "" ? null : Number(raw);
   const value = parsed === null || Number.isNaN(parsed) ? null : parsed;
@@ -188,7 +203,7 @@ export async function setEmployeeField(formData: FormData): Promise<void> {
   const id = String(formData.get("employeeId") ?? "");
   const column = String(formData.get("column") ?? "");
   if (!id) return;
-  await requireColumn(column, "edit");
+  await requireColumn(column, "edit", id);
 
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const orNull = (v: string) => (v === "" ? null : v);
@@ -248,7 +263,7 @@ export async function addEmployeeDocument(formData: FormData): Promise<void> {
   const column = String(formData.get("column") ?? "");
   const category = COLUMN_CATEGORY[column];
   if (!id || !category) return;
-  await requireColumn(column, "edit");
+  await requireColumn(column, "edit", id);
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return;
@@ -339,23 +354,33 @@ export async function setEmployeeFlag(formData: FormData): Promise<void> {
   const column = String(formData.get("column") ?? "");
   const field = FLAG_FIELD[column];
   if (!id || !field) return;
-  await requireColumn(column, "edit");
+  await requireColumn(column, "edit", id);
   const value = triBool(String(formData.get("value") ?? ""));
+  const before = await prisma.employee.findUnique({
+    where: { id },
+    select: { frcNeeded: true, emailNeeded: true, creditCardApproved: true },
+  });
   await prisma.employee.update({ where: { id }, data: { [field]: value } });
+  if (before) await notifyFlagTransitions(id, before, { [field]: value });
   revalidatePath("/admin/grid");
 }
 
 // Project Lead: set FRC need + size together.
 export async function setFrc(formData: FormData): Promise<void> {
   const id = String(formData.get("employeeId") ?? "");
+  if (id) await requireColumn("frc", "edit", id);
   if (!id) return;
-  await requireColumn("frc", "edit");
   const frcNeeded = triBool(String(formData.get("needed") ?? ""));
   const sizeRaw = String(formData.get("size") ?? "").trim();
+  const before = await prisma.employee.findUnique({
+    where: { id },
+    select: { frcNeeded: true, emailNeeded: true, creditCardApproved: true },
+  });
   await prisma.employee.update({
     where: { id },
     data: { frcNeeded, frcSize: sizeRaw === "" ? null : sizeRaw },
   });
+  if (before) await notifyFlagTransitions(id, before, { frcNeeded });
   revalidatePath("/admin/grid");
 }
 
@@ -373,7 +398,14 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
   // grant -- matches the same rule enforced when the form is rendered.
   const employee = await prisma.employee.findUnique({
     where: { id },
-    select: { projectLeadEmail: true, projectManagerEmail: true },
+    select: {
+      projectLeadEmail: true,
+      projectManagerEmail: true,
+      createdById: true,
+      frcNeeded: true,
+      emailNeeded: true,
+      creditCardApproved: true,
+    },
   });
   if (!employee) return;
   const assignedToMe = isAssignedProjectLeadOrManager(me, employee);
@@ -428,6 +460,12 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
 
   if (Object.keys(data).length > 0) {
     await prisma.employee.update({ where: { id }, data });
+    await notifyFlagTransitions(id, employee, {
+      frcNeeded: data.frcNeeded as boolean | null | undefined,
+      emailNeeded: data.emailNeeded as boolean | null | undefined,
+      creditCardApproved: data.creditCardApproved as boolean | null | undefined,
+    });
+    await notifyProjectLeadDetailsSaved(id, me);
   }
   if ("payRate" in data || "billRate" in data) {
     await syncRatesStatus(id);
@@ -436,10 +474,27 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
   revalidatePath(`/admin/employee/${id}`);
 }
 
+// Assign (or clear) the Project Lead / Project Manager on an existing
+// employee from the Onboarding list. Admin, Super Admin and HR only.
+export async function assignProjectContact(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me || !(isAdminRole(me.role) || me.role === "HR")) throw new Error("Not authorized");
+  const id = String(formData.get("employeeId") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  const email = String(formData.get("email") ?? "").trim() || null;
+  if (!id || (kind !== "PL" && kind !== "PM")) return;
+  await prisma.employee.update({
+    where: { id },
+    data: kind === "PL" ? { projectLeadEmail: email } : { projectManagerEmail: email },
+  });
+  revalidatePath("/admin");
+  revalidatePath("/admin/grid");
+}
+
 // Project Lead: toggle active / inactive.
 export async function setActive(formData: FormData): Promise<void> {
-  await requireColumn("active", "edit");
   const id = String(formData.get("employeeId") ?? "");
+  if (id) await requireColumn("active", "edit", id);
   if (!id) return;
   const active = String(formData.get("active") ?? "") === "true";
   await prisma.employee.update({
@@ -450,8 +505,8 @@ export async function setActive(formData: FormData): Promise<void> {
 }
 
 export async function setArchived(formData: FormData): Promise<void> {
-  await requireColumn("archived", "edit");
   const id = String(formData.get("employeeId") ?? "");
+  if (id) await requireColumn("archived", "edit", id);
   if (!id) return;
   const archived = String(formData.get("archived") ?? "") === "true";
   await prisma.employee.update({

@@ -181,18 +181,24 @@ export function canApprove(a: AccessMap, key: string): boolean {
   return !!a[key]?.canApprove;
 }
 
-// True if this user is the Project Lead or Project Manager assigned to this
-// specific employee (as either field -- a person's current role doesn't
-// always match which dropdown they were picked from at link creation).
+// True if this user is the Project Lead or Project Manager tied to this
+// specific employee: assigned as either field (a person's current role doesn't
+// always match which dropdown they were picked from), or the person who
+// created the employee's onboarding link.
 export function isAssignedProjectLeadOrManager(
-  me: { role: string; email: string },
-  employee: { projectLeadEmail: string | null; projectManagerEmail: string | null },
+  me: { id?: string; role: string; email: string },
+  employee: {
+    projectLeadEmail: string | null;
+    projectManagerEmail: string | null;
+    createdById?: string | null;
+  },
 ): boolean {
   if (me.role !== "PROJECT_LEAD" && me.role !== "PROJECT_MANAGER") return false;
   const myEmail = me.email.toLowerCase();
   return (
     employee.projectLeadEmail?.toLowerCase() === myEmail ||
-    employee.projectManagerEmail?.toLowerCase() === myEmail
+    employee.projectManagerEmail?.toLowerCase() === myEmail ||
+    (!!me.id && employee.createdById === me.id)
   );
 }
 
@@ -213,8 +219,12 @@ export async function hasEmployeeDocumentGrant(userId: string, employeeId: strin
 // grant sees documents for that one employee regardless of role.
 export function canAccessEmployeeDocuments(
   access: AccessMap,
-  me: { role: string; email: string; hasFullDocumentAccess?: boolean },
-  employee: { projectLeadEmail: string | null; projectManagerEmail: string | null },
+  me: { id?: string; role: string; email: string; hasFullDocumentAccess?: boolean },
+  employee: {
+    projectLeadEmail: string | null;
+    projectManagerEmail: string | null;
+    createdById?: string | null;
+  },
   granted = false,
 ): boolean {
   return (

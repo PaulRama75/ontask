@@ -6,6 +6,7 @@ import { getNavAccess, firstAllowedNavHref, isAdminRole } from "@/lib/rbac";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import { createOnboardingLink, deleteEmployee } from "./actions";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
+import AssignContactCell from "./AssignContactCell";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function AdminPage() {
   const nav = await getNavAccess(me.role);
   if (!nav.onboarding) redirect(firstAllowedNavHref(nav));
   const isAdmin = isAdminRole(me.role);
+  // Admin/Super Admin/HR can assign or change an employee's Project Lead/Manager.
+  const canAssign = isAdmin || me.role === "HR";
 
   const [employees, projectLeads, projectManagers] = await Promise.all([
     prisma.employee.findMany({
@@ -42,7 +45,7 @@ export default async function AdminPage() {
 
   return (
     <main className="min-h-screen py-10">
-      <div className="mx-auto max-w-5xl px-4">
+      <div className="mx-auto max-w-7xl px-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-white">Admin · Onboarding</h1>
           <Link href="/admin/grid" className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
@@ -105,13 +108,15 @@ export default async function AdminPage() {
           )}
         </section>
 
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
-          <table className="w-full text-left text-sm">
+        <section className="mt-6 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-white/10 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Project Lead</th>
+                <th className="px-4 py-3">Project Manager</th>
                 <th className="px-4 py-3">Docs</th>
                 <th className="px-4 py-3">Certs</th>
                 <th className="px-4 py-3">Onboarding link</th>
@@ -121,7 +126,7 @@ export default async function AdminPage() {
             <tbody>
               {employees.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-slate-500">
                     No employees yet. Generate a link above to get started.
                   </td>
                 </tr>
@@ -156,6 +161,20 @@ export default async function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={e.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {canAssign ? (
+                        <AssignContactCell employeeId={e.id} kind="PL" current={e.projectLeadEmail} options={projectLeads} />
+                      ) : (
+                        <ContactName email={e.projectLeadEmail} users={projectLeads} />
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {canAssign ? (
+                        <AssignContactCell employeeId={e.id} kind="PM" current={e.projectManagerEmail} options={projectManagers} />
+                      ) : (
+                        <ContactName email={e.projectManagerEmail} users={projectManagers} />
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-400">{e._count.documents}</td>
                     <td className="px-4 py-3 text-slate-400">{e._count.certifications}</td>
@@ -205,4 +224,10 @@ function StatusBadge({ status }: { status: string }) {
       {status}
     </span>
   );
+}
+
+function ContactName({ email, users }: { email: string | null; users: { email: string; name: string | null }[] }) {
+  if (!email) return <span className="text-slate-500">Not assigned</span>;
+  const u = users.find((x) => x.email.toLowerCase() === email.toLowerCase());
+  return <span className="text-slate-300">{u?.name || email}</span>;
 }

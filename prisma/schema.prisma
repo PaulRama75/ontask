@@ -50,6 +50,10 @@ model Employee {
   // both notified on completion.
   projectLeadEmail    String?
   projectManagerEmail String?
+  // The staff user who generated this employee's onboarding link. A Project
+  // Lead/Manager sees the employees they created plus those assigned to them.
+  // Null for records created before this was tracked (or via Excel import).
+  createdById String?
 
   // Rate info (set by Project Lead in Phase 3; placeholder now)
   payRate  Float?
@@ -323,4 +327,13 @@ model InvoiceComment {
   authorName   String
   message      String
   createdAt    DateTime @default(now())
+}
+
+// One row per scheduled notification already sent (weekly expiry digest,
+// hire-date anniversaries). The unique key is claimed before sending, so
+// only one app instance ever sends a given notification.
+model NotificationLog {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  createdAt DateTime @default(now())
 }

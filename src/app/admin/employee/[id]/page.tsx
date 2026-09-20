@@ -13,6 +13,8 @@ import {
 } from "@/lib/rbac";
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 import DocRow from "./DocRow";
+import CurrencyInput from "../../CurrencyInput";
+import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
 
@@ -171,9 +173,9 @@ export default async function EmployeeLibraryPage({
               {canView(access, "payRate") && (
                 <PLField label="Pay Rate">
                   {(canEdit(access, "payRate") || canEditThis) ? (
-                    <input type="number" step="0.01" min="0" name="payRate" defaultValue={e.payRate ?? ""} className={inputCls} />
+                    <CurrencyInput name="payRate" defaultValue={e.payRate} className={inputCls} />
                   ) : (
-                    <ReadOnly value={e.payRate != null ? `$${e.payRate.toFixed(2)}` : null} />
+                    <ReadOnly value={e.payRate != null ? formatCurrency(e.payRate) : null} />
                   )}
                 </PLField>
               )}
@@ -181,9 +183,9 @@ export default async function EmployeeLibraryPage({
               {canView(access, "billRate") && (
                 <PLField label="Bill Rate">
                   {(canEdit(access, "billRate") || canEditThis) ? (
-                    <input type="number" step="0.01" min="0" name="billRate" defaultValue={e.billRate ?? ""} className={inputCls} />
+                    <CurrencyInput name="billRate" defaultValue={e.billRate} className={inputCls} />
                   ) : (
-                    <ReadOnly value={e.billRate != null ? `$${e.billRate.toFixed(2)}` : null} />
+                    <ReadOnly value={e.billRate != null ? formatCurrency(e.billRate) : null} />
                   )}
                 </PLField>
               )}

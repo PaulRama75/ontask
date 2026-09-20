@@ -25,6 +25,7 @@ import UploadCell from "./UploadCell";
 import FlagCell from "./FlagCell";
 import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
+import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export default async function GridPage({
   // A Project Lead/Manager without full library access only gets a details
   // link for employees they were personally assigned to -- matching the
   // same rule enforced on the employee detail page itself.
-  const meAuth = { role: me.role, email: me.email };
+  const meAuth = { id: me.id, role: me.role, email: me.email };
   // One-off Admin-granted shares (EmployeeDocumentGrant) also unlock the
   // details link, same as being the assigned Project Lead/Manager.
   const grantedEmployeeIds = canLibrary
@@ -87,7 +88,12 @@ export default async function GridPage({
           (g) => g.employeeId,
         ),
       );
-  function canOpenDetailsFor(e: { id: string; projectLeadEmail: string | null; projectManagerEmail: string | null }) {
+  function canOpenDetailsFor(e: {
+    id: string;
+    projectLeadEmail: string | null;
+    projectManagerEmail: string | null;
+    createdById: string | null;
+  }) {
     return canLibrary || canPLDetails || isAssignedProjectLeadOrManager(meAuth, e) || grantedEmployeeIds.has(e.id);
   }
 
@@ -97,13 +103,19 @@ export default async function GridPage({
   // Site-level (row) access: a non-admin with assigned sites only sees those.
   const restrictedSites = isAdminRole(me.role) ? null : await getRestrictedSites(me.id);
 
-  const all = await prisma.employee.findMany({
+  const everyone = await prisma.employee.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       documents: { select: { id: true, fileName: true, category: true, label: true } },
       certifications: { select: { name: true } },
     },
   });
+  // Project Leads/Managers only see the employees they created or are assigned
+  // to. Every other role sees all rows (limited to the columns their access
+  // allows). Applied before counts/duplicate detection so nothing about other
+  // people's rows leaks.
+  const rowScoped = me.role === "PROJECT_LEAD" || me.role === "PROJECT_MANAGER";
+  const all = rowScoped ? everyone.filter((e) => isAssignedProjectLeadOrManager(meAuth, e)) : everyone;
 
   // Detected across the full unfiltered set so a duplicate's badge still
   // shows even when its match got filtered out of view (e.g. different site).
@@ -452,7 +464,7 @@ export default async function GridPage({
                         {editable("payRate") ? (
                           <RateCell id={e.id} field="payRate" value={e.payRate} />
                         ) : (
-                          <span>{e.payRate != null ? `$${e.payRate.toFixed(2)}` : "—"}</span>
+                          <span>{formatCurrency(e.payRate)}</span>
                         )}
                       </td>
                     )}
@@ -461,7 +473,7 @@ export default async function GridPage({
                         {editable("billRate") ? (
                           <RateCell id={e.id} field="billRate" value={e.billRate} />
                         ) : (
-                          <span>{e.billRate != null ? `$${e.billRate.toFixed(2)}` : "—"}</span>
+                          <span>{formatCurrency(e.billRate)}</span>
                         )}
                       </td>
                     )}

@@ -16,7 +16,7 @@ export async function GET(
   const { id } = await params;
   const doc = await prisma.document.findUnique({
     where: { id },
-    include: { employee: { select: { projectLeadEmail: true, projectManagerEmail: true } } },
+    include: { employee: { select: { projectLeadEmail: true, projectManagerEmail: true, createdById: true } } },
   });
   if (!doc) return new Response("Not found", { status: 404 });
 
