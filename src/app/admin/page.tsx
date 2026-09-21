@@ -7,6 +7,7 @@ import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import { createOnboardingLink, deleteEmployee } from "./actions";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
 import AssignContactCell from "./AssignContactCell";
+import ImportEmployees from "./ImportEmployees";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,8 @@ export default async function AdminPage() {
             </p>
           )}
         </section>
+
+        {canAssign && <ImportEmployees />}
 
         <section className="mt-6 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full min-w-[900px] text-left text-sm">
