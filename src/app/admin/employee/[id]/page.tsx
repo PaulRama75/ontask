@@ -147,7 +147,17 @@ export default async function EmployeeLibraryPage({
             <p className="mt-1 text-xs text-slate-400">
               Filled in by the Project Lead after the employee completes onboarding.
             </p>
-            <form action={saveProjectLeadDetails} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* key={e.id} forces a full remount when navigating between employees.
+                Every field below is uncontrolled (defaultValue/defaultChecked),
+                which only applies on mount -- without this key, client-side
+                navigation from one employee's page to another can leave a
+                leftover Yes/No selection from the previous employee sitting in
+                the live DOM and get submitted for this one instead. */}
+            <form
+              key={e.id}
+              action={saveProjectLeadDetails}
+              className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"
+            >
               <input type="hidden" name="employeeId" value={e.id} />
 
               {canView(access, "site") && (
