@@ -136,6 +136,7 @@ export async function submitOnboarding(
         employeeName,
         employeeId,
         category: cat,
+        mimeType: file.type,
       });
       await prisma.document.create({
         data: {
@@ -262,6 +263,7 @@ export async function saveOnboardingDraft(
         employeeName,
         employeeId,
         category: cat,
+        mimeType: file.type,
       });
       await prisma.document.create({
         data: {

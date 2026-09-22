@@ -284,7 +284,12 @@ export async function addEmployeeDocument(formData: FormData): Promise<void> {
     .join(" ");
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const saved = await saveFile(buffer, file.name, { employeeName, employeeId: id, category });
+  const saved = await saveFile(buffer, file.name, {
+    employeeName,
+    employeeId: id,
+    category,
+    mimeType: file.type,
+  });
 
   const title = String(formData.get("label") ?? "").trim();
 

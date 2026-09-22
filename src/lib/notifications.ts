@@ -5,6 +5,7 @@ import { sendEmail, emailButton } from "./email";
 // (demo, local) point somewhere harmless without a code change.
 const IT_EMAIL = process.env.IT_NOTIFY_EMAIL || "IT@ferinspection.com";
 const CREDIT_CARD_EMAIL = process.env.CREDIT_CARD_NOTIFY_EMAIL || "paul.rama@ferinspection.com";
+const TRAVEL_ADMIN_EMAIL = process.env.TRAVEL_ADMIN_EMAIL || "Brittany.bright@ferinspection.com";
 
 const TZ = "America/Chicago";
 const EXPIRY_WINDOW_DAYS = 30;
@@ -22,6 +23,28 @@ async function safetyRecipients(): Promise<string[]> {
     where: { role: "SAFETY", active: true },
     select: { email: true },
   });
+  return users.map((u) => u.email);
+}
+
+async function tracksRecipients(): Promise<string[]> {
+  const users = await prisma.user.findMany({
+    where: { role: "TRACKS", active: true },
+    select: { email: true },
+  });
+  return users.map((u) => u.email);
+}
+
+// Designated onboarding HR contact if one's been set (Users page), else
+// every active HR user -- same convention used for onboarding-submission emails.
+async function hrRecipients(): Promise<string[]> {
+  const designated = await prisma.user.findMany({
+    where: { active: true, receivesOnboardingHrEmails: true },
+    select: { email: true },
+  });
+  const users =
+    designated.length > 0
+      ? designated
+      : await prisma.user.findMany({ where: { active: true, role: "HR" }, select: { email: true } });
   return users.map((u) => u.email);
 }
 
@@ -61,6 +84,63 @@ export async function notifyProjectLeadDetailsSaved(
     `Project Lead details saved: ${fullName(e)}`,
     `<p>${savedBy.name || savedBy.email} (${who}) saved the Project Lead details for <strong>${fullName(e)}</strong>.</p>
 <p>Please review the safety requirements (safety equipment, trainings, fit test, site specifics).</p>
+${employeeLink(e.id)}`,
+  );
+}
+
+// Travel request submitted (pre-filled from the grid, completed by PL/PM/Admin).
+export async function notifyTravelRequestSubmitted(
+  employeeId: string,
+  submittedBy: { name: string | null; email: string },
+  travel: {
+    jobNumber: string | null;
+    clientName: string | null;
+    fullName: string | null;
+    dateOfDeparture: Date | null;
+    dateOfReturn: Date | null;
+    departureLocation: string | null;
+    destinationLocation: string | null;
+    flightNeeded: boolean | null;
+    rentalCarNeeded: boolean | null;
+    additionalComments: string | null;
+  },
+): Promise<void> {
+  const e = await prisma.employee.findUnique({ where: { id: employeeId } });
+  if (!e) return;
+  const row = (label: string, v: string) =>
+    v ? `<tr><td style="padding:2px 12px 2px 0;color:#94a3b8">${label}</td><td style="padding:2px 0">${v}</td></tr>` : "";
+  await send(
+    [TRAVEL_ADMIN_EMAIL],
+    `Travel request: ${travel.fullName || fullName(e)}`,
+    `<p>${submittedBy.name || submittedBy.email} submitted a travel request for <strong>${travel.fullName || fullName(e)}</strong>.</p>
+<table style="border-collapse:collapse;font-size:14px">
+${row("FER Job Number", travel.jobNumber ?? "")}
+${row("Client Name", travel.clientName ?? "")}
+${row("Flight needed", travel.flightNeeded == null ? "" : travel.flightNeeded ? "Yes" : "No")}
+${row("Departure", [travel.departureLocation, travel.dateOfDeparture ? fmtDate(travel.dateOfDeparture) : null].filter(Boolean).join(" · "))}
+${row("Return", [travel.destinationLocation, travel.dateOfReturn ? fmtDate(travel.dateOfReturn) : null].filter(Boolean).join(" · "))}
+${row("Rental car needed", travel.rentalCarNeeded == null ? "" : travel.rentalCarNeeded ? "Yes" : "No")}
+${row("Comments", travel.additionalComments ?? "")}
+</table>
+${employeeLink(e.id)}`,
+  );
+}
+
+// Employee Status Change form submitted (PL/PM or Admin, third step after
+// Project Lead Details). HR, Tracks, and Safety are all notified.
+export async function notifyStatusChangeSubmitted(
+  employeeId: string,
+  submittedBy: { name: string | null; email: string },
+  change: { reasonForChange: string | null; newSite: string | null; effectiveDate: Date | null },
+): Promise<void> {
+  const e = await prisma.employee.findUnique({ where: { id: employeeId } });
+  if (!e) return;
+  const [hr, tracks, safety] = await Promise.all([hrRecipients(), tracksRecipients(), safetyRecipients()]);
+  await send(
+    [...hr, ...tracks, ...safety],
+    `Employee status change: ${fullName(e)}`,
+    `<p>${submittedBy.name || submittedBy.email} submitted a status change for <strong>${fullName(e)}</strong>.</p>
+<p>Reason: <strong>${change.reasonForChange || "(not specified)"}</strong>${change.newSite ? `<br>New site: <strong>${change.newSite}</strong>` : ""}${change.effectiveDate ? `<br>Effective: <strong>${fmtDate(change.effectiveDate)}</strong>` : ""}</p>
 ${employeeLink(e.id)}`,
   );
 }

@@ -243,6 +243,7 @@ export const NAV_ITEMS = [
   { key: "grid", label: "Data Grid", href: "/admin/grid" },
   { key: "onboarding", label: "Onboarding", href: "/admin" },
   { key: "invoices", label: "Invoices", href: "/admin/invoices" },
+  { key: "timesheets", label: "Timesheets", href: "/admin/timesheets" },
 ] as const;
 
 export type NavKey = (typeof NAV_ITEMS)[number]["key"];
@@ -262,6 +263,14 @@ export function defaultNavVisible(role: Role, navKey: NavKey): boolean {
         role === "PROJECT_MANAGER" ||
         role === "PROJECT_LEAD" ||
         role === "ACCOUNT_MANAGER" ||
+        isAdminRole(role)
+      );
+    case "timesheets":
+      return (
+        role === "PROJECT_MANAGER" ||
+        role === "PROJECT_LEAD" ||
+        role === "HR" ||
+        role === "TRACKS" ||
         isAdminRole(role)
       );
     default:

@@ -98,10 +98,14 @@ model Employee {
   approved   Boolean   @default(false)
   approvedAt DateTime?
 
-  certifications Certification[]
-  documents      Document[]
-  onboardingLink OnboardingLink?
-  documentGrants EmployeeDocumentGrant[]
+  certifications       Certification[]
+  documents            Document[]
+  onboardingLink       OnboardingLink?
+  documentGrants       EmployeeDocumentGrant[]
+  statusChangeRequests StatusChangeRequest[]
+  travelRequests       TravelRequest[]
+  timesheetToken       EmployeeTimesheetToken?
+  timesheets           Timesheet[]
 }
 
 // Multiple certifications per employee.
@@ -336,4 +340,137 @@ model NotificationLog {
   id        String   @id @default(cuid())
   key       String   @unique
   createdAt DateTime @default(now())
+}
+
+// A request to change an employee's status/rate/site/job assignment, filled
+// out by the Project Lead/Manager assigned to them (or an Admin) as the
+// third step of the onboarding flow, shown only after Project Lead Details
+// have been saved. On submit, `newSite` is written onto Employee.site and
+// the row is kept as a permanent record of the change (who/why/when).
+model StatusChangeRequest {
+  id                     String    @id @default(cuid())
+  employee               Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId             String
+  effectiveDate          DateTime?
+  reasonForChange        String?
+  employmentType         String? // comma-separated, same options as Employee.employmentType
+  fromJobNumber          String?
+  toJobNumber            String?
+  newSite                String? // applied onto Employee.site when the form is submitted
+  detailsOfChange        String?
+  drivingRecordRequired  Boolean?
+  creditCardRequested    Boolean?
+  creditCardApprovedByGm Boolean?
+  deactivateEmailAccess  Boolean?
+  deactivateAmexCard     Boolean?
+  requestingManagerName  String?
+  submittedByUserId      String
+  submittedByName        String
+  createdAt              DateTime  @default(now())
+}
+
+// A travel request pre-filled from the employee's grid data and completed by
+// their Project Lead/Manager (or an Admin). Emailed to the Travel
+// Administrator on submit; each row is a permanent record of the request.
+model TravelRequest {
+  id                     String    @id @default(cuid())
+  employee               Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId             String
+  jobNumber              String?
+  clientName             String?
+  fullName               String?
+  dateOfBirth            DateTime?
+  gender                 String?
+  knownTravelerNumber    String?
+  phone                  String?
+  email                  String?
+  flightNeeded           Boolean?
+  travelType             String?
+  dateOfDeparture        DateTime?
+  dateOfReturn           DateTime?
+  departureLocation      String?
+  destinationLocation    String?
+  seatPreference         String?
+  timePreference         String?
+  rentalCarNeeded        Boolean?
+  rentalCarType          String?
+  rentalCarJustification String?
+  pickupLocation         String?
+  dropoffLocation        String?
+  dateOfPickup           DateTime?
+  dateOfCarReturn        DateTime?
+  billingManagerEmail    String?
+  additionalComments     String?
+  submittedByUserId      String
+  submittedByName        String
+  createdAt              DateTime  @default(now())
+}
+
+// A persistent (reusable, not one-time) token letting one employee reach a
+// timesheet-only self-service portal at /timesheet/[token] -- no password,
+// no access to anything else in the app. Admin/Super Admin generate it from
+// the employee page and can revoke/regenerate it if it leaks.
+model EmployeeTimesheetToken {
+  id         String    @id @default(cuid())
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String    @unique
+  token      String    @unique
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+}
+
+// One weekly timesheet for one employee, matching the Time & Expense Report
+// template. Day-level hours/expenses live on TimesheetDay (not here) so
+// reporting can filter/group by job number and date at the day level -- a
+// single week can span more than one job number.
+model Timesheet {
+  id                 String         @id @default(cuid())
+  employee           Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId         String
+  weekEnding         DateTime // the Sunday the week ends on
+  clientName         String?
+  location           String?
+  jobNumber          String? // primary/default job number for the week
+  notes              String?
+  advancedToEmployee Float?
+  clientApprovalName String?
+  clientApprovedAt   DateTime?
+  employeeSignedAt   DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  days               TimesheetDay[]
+
+  @@unique([employeeId, weekEnding])
+}
+
+// One calendar day within a Timesheet, mirroring the template's two daily
+// grids (billable time + mileage, and expenses).
+model TimesheetDay {
+  id                 String    @id @default(cuid())
+  timesheet          Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  timesheetId        String
+  date               DateTime
+  jobNumber          String? // per-day override; falls back to Timesheet.jobNumber when reporting
+  afeNumber          String?
+  woNumber           String?
+  details            String?
+  stHours            Float?
+  otHours            Float?
+  ptoHours           Float?
+  vacationHours      Float?
+  holidayHours       Float?
+  perDiem            Float?
+  mileageDriven      Float?
+  mileageAmount      Float?
+  lodging            Float?
+  meals              Float?
+  airfare            Float?
+  fuel               Float?
+  carRental          Float?
+  gasoline           Float?
+  parking            Float?
+  misc               Float?
+  expenseDescription String?
+
+  @@unique([timesheetId, date])
 }

@@ -15,6 +15,8 @@ import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } fro
 import DocRow from "./DocRow";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
+import { submitStatusChange } from "./status-change/actions";
+import { generateTimesheetLink, revokeTimesheetLink } from "./timesheet-link/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +56,14 @@ function dateInputValue(d: Date | null) {
 
 export default async function EmployeeLibraryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ travelSent?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  const { travelSent } = await searchParams;
 
   const { id } = await params;
 
@@ -130,16 +135,47 @@ export default async function EmployeeLibraryPage({
       })
     : [];
 
+  // Status Change is the third step of the onboarding flow, shown once
+  // Project Lead Details have been submitted at least once (proxied by
+  // either core PL field being set), and only to the same people who can
+  // edit those details (assigned PL/PM, or Admin/Super Admin).
+  const plDetailsSubmitted = e.site != null || e.hireDate != null;
+  const canFileStatusChange = plDetailsSubmitted && (canEditThis || isAdmin);
+  const statusChangeHistory = canFileStatusChange
+    ? await prisma.statusChangeRequest.findMany({
+        where: { employeeId: id },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      })
+    : [];
+
+  const timesheetToken = isAdmin
+    ? await prisma.employeeTimesheetToken.findUnique({ where: { employeeId: id } })
+    : null;
+  const timesheetBase = process.env.APP_BASE_URL ?? "http://localhost:3000";
+
   return (
     <main className="min-h-screen py-10">
       <div className="mx-auto max-w-4xl px-4">
-        <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
-          ← Back to admin
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
+            ← Back to admin
+          </Link>
+          {(canEditThis || isAdmin) && (
+            <Link href={`/admin/employee/${id}/travel`} className="text-sm text-cyan-400 hover:underline">
+              Travel Request →
+            </Link>
+          )}
+        </div>
         <h1 className="mt-2 text-2xl font-bold text-white">{name}</h1>
         <p className="text-sm text-slate-400">
           {canFullView ? "Document library" : "Project Lead details"} · status {e.status}
         </p>
+        {travelSent === "1" && (
+          <p className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+            Travel request submitted and emailed to the Travel Administrator.
+          </p>
+        )}
 
         {(canFullView || canEditThis) && (
           <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
@@ -410,6 +446,111 @@ export default async function EmployeeLibraryPage({
           </section>
         )}
 
+        {canFileStatusChange && (
+          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Employee Status Change</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Third step after Project Lead Details. Submitting emails HR, Tracks, and Safety. A new
+              site here also updates the employee&apos;s Site on the grid.
+            </p>
+            <form action={submitStatusChange} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <input type="hidden" name="employeeId" value={e.id} />
+
+              <PLField label="Effective Date of Change">
+                <input type="date" name="effectiveDate" className={inputCls} />
+              </PLField>
+              <PLField label="Reason for Change">
+                <input name="reasonForChange" className={inputCls} />
+              </PLField>
+
+              <div className="sm:col-span-2">
+                <PLField label="Employment Type">
+                  <CheckboxGroup name="employmentType" options={EMPLOYMENT_TYPE_OPTIONS} selected={[]} />
+                </PLField>
+              </div>
+
+              <PLField label="From Job Number">
+                <input name="fromJobNumber" defaultValue={e.jobNumber ?? ""} className={inputCls} />
+              </PLField>
+              <PLField label="To Job Number">
+                <input name="toJobNumber" className={inputCls} />
+              </PLField>
+
+              <PLField label="New Site">
+                <input name="newSite" defaultValue={e.site ?? ""} className={inputCls} placeholder="Leave unchanged if not moving sites" />
+              </PLField>
+              <PLField label="Requesting Manager Name">
+                <input name="requestingManagerName" defaultValue={me.name ?? ""} className={inputCls} />
+              </PLField>
+
+              <div className="sm:col-span-2">
+                <PLField label="Details of Change">
+                  <textarea name="detailsOfChange" rows={2} className={inputCls} />
+                </PLField>
+              </div>
+
+              <PLField label="Driving Record Required">
+                <select name="drivingRecordRequired" defaultValue="" className={inputCls}>
+                  <option value="">—</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </PLField>
+              <PLField label="Corporate Credit Card Requested">
+                <select name="creditCardRequested" defaultValue="" className={inputCls}>
+                  <option value="">—</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </PLField>
+
+              <PLField label="Approved by GM">
+                <select name="creditCardApprovedByGm" defaultValue="" className={inputCls}>
+                  <option value="">—</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </PLField>
+              <PLField label="Deactivate FER Email/SharePoint Access">
+                <select name="deactivateEmailAccess" defaultValue="" className={inputCls}>
+                  <option value="">—</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </PLField>
+
+              <PLField label="Deactivate FER Corporate American Express Card">
+                <select name="deactivateAmexCard" defaultValue="" className={inputCls}>
+                  <option value="">—</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </PLField>
+
+              <div className="sm:col-span-2">
+                <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
+                  Submit Status Change
+                </button>
+              </div>
+            </form>
+
+            {statusChangeHistory.length > 0 && (
+              <div className="mt-6 border-t border-white/10 pt-4">
+                <h3 className="text-sm font-semibold text-slate-300">Previous changes</h3>
+                <ul className="mt-2 space-y-2 text-xs text-slate-400">
+                  {statusChangeHistory.map((s) => (
+                    <li key={s.id}>
+                      {s.createdAt.toISOString().slice(0, 10)} — {s.submittedByName}:{" "}
+                      {s.reasonForChange || "(no reason given)"}
+                      {s.newSite ? ` · New site: ${s.newSite}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
         {canFullView && (
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">Details</h2>
@@ -475,6 +616,39 @@ export default async function EmployeeLibraryPage({
           </section>
         )}
         </>
+        )}
+
+        {isAdmin && (
+          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Timesheets</h2>
+              <Link href={`/admin/timesheets?employeeId=${e.id}`} className="text-sm text-cyan-400 hover:underline">
+                View timesheets →
+              </Link>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              Share this link with {name || "the employee"} so they can enter their own weekly time --
+              no password, and no access to anything else in this app.
+            </p>
+            {timesheetToken && !timesheetToken.revokedAt ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <code className="rounded bg-slate-950/60 px-2 py-1 text-xs text-cyan-300 break-all">
+                  {timesheetBase}/timesheet/{timesheetToken.token}
+                </code>
+                <form action={revokeTimesheetLink}>
+                  <input type="hidden" name="employeeId" value={e.id} />
+                  <button className="text-xs text-rose-300 hover:underline">Revoke</button>
+                </form>
+              </div>
+            ) : (
+              <form action={generateTimesheetLink} className="mt-3">
+                <input type="hidden" name="employeeId" value={e.id} />
+                <button className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+                  {timesheetToken ? "Generate new link" : "Generate link"}
+                </button>
+              </form>
+            )}
+          </section>
         )}
 
         {isAdmin && (

@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import sharp from "sharp";
 
 // Storage abstraction. LOCAL uses the filesystem (dev only — App Platform's disk
 // is ephemeral). S3 uses DigitalOcean Spaces (S3-compatible) for production.
@@ -74,6 +75,43 @@ export async function deleteFile(key: string): Promise<void> {
   }
 }
 
+// Re-encodes JPEG/PNG/WebP uploads at a smaller max dimension and quality
+// (the biggest win for phone-camera license/ID photos, which routinely come
+// in at several MB). HEIC and PDF are left untouched -- HEIC re-encoding
+// needs a libvips build with HEIF support this platform doesn't ship, and
+// real PDF compression needs external tooling this server doesn't have.
+// Never applied retroactively to files already stored; only new uploads.
+// If compression ever fails or doesn't actually shrink the file, the
+// original buffer is kept -- this must never block an upload.
+const COMPRESSIBLE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_DIMENSION = 2000;
+
+export async function compressImageIfApplicable(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<Buffer> {
+  if (!COMPRESSIBLE_MIME.has(mimeType)) return buffer;
+  try {
+    const img = sharp(buffer).rotate(); // rotate() bakes in EXIF orientation before resizing
+    const resized = img.resize({
+      width: MAX_DIMENSION,
+      height: MAX_DIMENSION,
+      fit: "inside",
+      withoutEnlargement: true,
+    });
+    const out =
+      mimeType === "image/png"
+        ? await resized.png({ compressionLevel: 9, palette: true }).toBuffer()
+        : mimeType === "image/webp"
+          ? await resized.webp({ quality: 80 }).toBuffer()
+          : await resized.jpeg({ quality: 78, mozjpeg: true }).toBuffer();
+    return out.length > 0 && out.length < buffer.length ? out : buffer;
+  } catch (err) {
+    console.error("[storage] image compression failed, keeping original", err);
+    return buffer;
+  }
+}
+
 // Turn arbitrary text into a safe, readable path segment.
 function slug(input: string, fallback: string): string {
   const s = input
@@ -91,10 +129,16 @@ function slug(input: string, fallback: string): string {
 export async function saveFile(
   buffer: Buffer,
   originalName: string,
-  opts: { employeeName?: string | null; employeeId: string; category?: string } = {
+  opts: {
+    employeeName?: string | null;
+    employeeId: string;
+    category?: string;
+    mimeType?: string;
+  } = {
     employeeId: "unknown",
   },
 ): Promise<SavedFile> {
+  if (opts.mimeType) buffer = await compressImageIfApplicable(buffer, opts.mimeType);
   const ext = path.extname(originalName);
   const baseName = slug(path.basename(originalName, ext), "file") + ext;
   const folder = slug(opts.employeeName ?? "", opts.employeeId);
