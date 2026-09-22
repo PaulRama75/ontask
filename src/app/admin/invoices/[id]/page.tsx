@@ -9,6 +9,7 @@ import {
   addLineItem,
   importLineItemsFromExcel,
   deleteLineItem,
+  updateLineItemAmount,
   uploadInvoiceAttachment,
   deleteInvoiceAttachment,
   attachGridExport,
@@ -27,6 +28,7 @@ import {
   deleteInvoice,
 } from "../actions";
 import ConfirmSubmitButton from "../../ConfirmSubmitButton";
+import CurrencyInput from "../../CurrencyInput";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +75,13 @@ export default async function InvoiceDetailPage({
   if (!canView) redirect("/admin/invoices");
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwner;
+  // An AM can fix a mistaken amount while it's awaiting their review; an
+  // Admin can do the same through their own review step, right up to the
+  // point they give final approval. Correcting it here means a typo doesn't
+  // have to go all the way back to the PM as a rejection.
+  const canEditAmounts =
+    (isAM && invoice.status === "SUBMITTED") ||
+    (isAdmin && (invoice.status === "SUBMITTED" || invoice.status === "AM_APPROVED"));
   const total = invoice.lineItems.reduce((sum, li) => sum + li.amount, 0);
   const isRejected = invoice.status === "DRAFT" && !!invoice.rejectionReason;
 
@@ -181,6 +190,11 @@ export default async function InvoiceDetailPage({
 
         <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">Line items</h2>
+          {canEditAmounts && (
+            <p className="mt-1 text-xs text-slate-400">
+              Click an amount to correct it before you approve.
+            </p>
+          )}
           <table className="mt-3 w-full text-sm">
             <thead>
               <tr>
@@ -193,7 +207,21 @@ export default async function InvoiceDetailPage({
               {invoice.lineItems.map((li) => (
                 <tr key={li.id} className="border-t border-white/10">
                   <td className={td}>{li.description}</td>
-                  <td className={td}>${li.amount.toFixed(2)}</td>
+                  <td className={td}>
+                    {canEditAmounts ? (
+                      <form action={updateLineItemAmount}>
+                        <input type="hidden" name="lineItemId" value={li.id} />
+                        <CurrencyInput
+                          name="amount"
+                          defaultValue={li.amount}
+                          autoSubmit
+                          className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
+                        />
+                      </form>
+                    ) : (
+                      `$${li.amount.toFixed(2)}`
+                    )}
+                  </td>
                   {isDraftEditable && (
                     <td className={td}>
                       <form action={deleteLineItem}>

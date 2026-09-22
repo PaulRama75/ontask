@@ -286,6 +286,36 @@ export async function deleteLineItem(form: FormData): Promise<void> {
   revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
 }
 
+// Lets an Account Manager or Admin correct a line item's amount after the PM
+// submits it, so a mistake doesn't have to go all the way back to the PM as a
+// rejection. AM may only do this while the invoice is awaiting their review;
+// Admin may do it through their own final-approval step too. Once the invoice
+// has been sent, amounts are locked for everyone (including the PM's own
+// DRAFT-only edit path above).
+export async function updateLineItemAmount(form: FormData): Promise<void> {
+  const me = await requireAM();
+  const id = String(form.get("lineItemId") ?? "");
+  const amount = Number(form.get("amount") ?? "");
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive number.");
+
+  const lineItem = await prisma.invoiceLineItem.findUnique({
+    where: { id },
+    include: { invoice: true },
+  });
+  if (!lineItem) return;
+
+  const isAM = me.role === "ACCOUNT_MANAGER";
+  const canEdit =
+    (isAM && lineItem.invoice.status === "SUBMITTED") ||
+    (isAdminRole(me.role) && (lineItem.invoice.status === "SUBMITTED" || lineItem.invoice.status === "AM_APPROVED"));
+  if (!canEdit) throw new Error("This invoice's amounts can't be changed right now.");
+
+  await prisma.invoiceLineItem.update({ where: { id }, data: { amount } });
+  await touchInvoice(lineItem.invoiceId, me);
+  revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
+  revalidatePath("/admin/invoices");
+}
+
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_ATTACHMENT_MIME = new Set([
   "application/pdf",
