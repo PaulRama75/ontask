@@ -323,6 +323,8 @@ const ALLOWED_ATTACHMENT_MIME = new Set([
   "image/png",
   "image/heic",
   "image/webp",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-excel", // legacy .xls
 ]);
 
 export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
@@ -341,7 +343,7 @@ export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
     throw new Error(`"${file.name}" exceeds the 15 MB limit.`);
   }
   if (file.type && !ALLOWED_ATTACHMENT_MIME.has(file.type)) {
-    throw new Error(`"${file.name}" must be a PDF or image.`);
+    throw new Error(`"${file.name}" must be a PDF, image, or Excel file.`);
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());

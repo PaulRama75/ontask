@@ -2,6 +2,9 @@
 
 import { useRef } from "react";
 
+const DEFAULT_ACCEPT =
+  "application/pdf,image/*,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
+
 // Category select + file input + Upload button, with a "Take photo" button
 // that reconfigures the SAME file input to open the device camera directly
 // (mobile only — desktop browsers just ignore the capture attribute and it
@@ -29,7 +32,7 @@ export default function AttachmentUploadForm({
   function resetAccept() {
     const input = fileRef.current;
     if (!input) return;
-    input.accept = "application/pdf,image/*";
+    input.accept = DEFAULT_ACCEPT;
     input.removeAttribute("capture");
   }
 
@@ -47,7 +50,7 @@ export default function AttachmentUploadForm({
         ref={fileRef}
         type="file"
         name="file"
-        accept="application/pdf,image/*"
+        accept={DEFAULT_ACCEPT}
         required
         onChange={resetAccept}
         className="text-sm text-slate-300"
