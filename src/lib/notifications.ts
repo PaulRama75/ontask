@@ -1,7 +1,8 @@
-import type { TravelRequest } from "@prisma/client";
+import type { StatusChangeRequest, TravelRequest } from "@prisma/client";
 import { prisma } from "./prisma";
 import { sendEmail, emailButton } from "./email";
 import { buildTravelRequestPdf, travelPdfFileName } from "./travelPdf";
+import { buildStatusChangePdf, statusChangePdfFileName } from "./statusChangePdf";
 
 // Fixed recipients requested by the business; env vars let each environment
 // (demo, local) point somewhere harmless without a code change.
@@ -131,21 +132,29 @@ ${employeeLink(e.id)}`,
 }
 
 // Employee Status Change form submitted (PL/PM or Admin, third step after
-// Project Lead Details). HR, Tracks, and Safety are all notified.
-export async function notifyStatusChangeSubmitted(
-  employeeId: string,
-  submittedBy: { name: string | null; email: string },
-  change: { reasonForChange: string | null; newSite: string | null; effectiveDate: Date | null },
-): Promise<void> {
-  const e = await prisma.employee.findUnique({ where: { id: employeeId } });
+// Project Lead Details). HR, Tracks, and Safety are all notified, with the
+// completed HR-FORM-02 attached as a PDF.
+export async function notifyStatusChangeSubmitted(change: StatusChangeRequest): Promise<void> {
+  const e = await prisma.employee.findUnique({ where: { id: change.employeeId } });
   if (!e) return;
+  const name = fullName(e);
   const [hr, tracks, safety] = await Promise.all([hrRecipients(), tracksRecipients(), safetyRecipients()]);
+
+  let attachments: { filename: string; content: string }[] | undefined;
+  try {
+    const pdf = await buildStatusChangePdf(change, name);
+    attachments = [{ filename: statusChangePdfFileName(change, name), content: Buffer.from(pdf).toString("base64") }];
+  } catch (err) {
+    console.error("[notify] status change PDF generation failed; sending without attachment", err);
+  }
+
   await send(
     [...hr, ...tracks, ...safety],
-    `Employee status change: ${fullName(e)}`,
-    `<p>${submittedBy.name || submittedBy.email} submitted a status change for <strong>${fullName(e)}</strong>.</p>
+    `Employee status change: ${name}`,
+    `<p>${change.submittedByName} submitted a status change for <strong>${name}</strong>. The completed form is attached as a PDF.</p>
 <p>Reason: <strong>${change.reasonForChange || "(not specified)"}</strong>${change.newSite ? `<br>New site: <strong>${change.newSite}</strong>` : ""}${change.effectiveDate ? `<br>Effective: <strong>${fmtDate(change.effectiveDate)}</strong>` : ""}</p>
 ${employeeLink(e.id)}`,
+    attachments,
   );
 }
 

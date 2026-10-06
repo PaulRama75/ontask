@@ -33,6 +33,19 @@ const PL_FIELDS = [
 
 // Job-assignment checkbox groups (multi-select, stored as comma-separated strings).
 const EMPLOYMENT_TYPE_OPTIONS = ["Full Time", "Part Time", "1099 Employee", "Benefits", "No Benefits"];
+// Same choices as the "Reason for Change" dropdown on the HR-FORM-02 Word form.
+const STATUS_CHANGE_REASONS = [
+  "Rate Increase",
+  "Rate Decrease",
+  "Benefits",
+  "Billing Rate/Code",
+  "Involuntary Layoff",
+  "Voluntary Layoff",
+  "Promotion",
+  "Demotion",
+  "Site/Job Transfer",
+  "Other",
+];
 const POSITION_TYPE_OPTIONS = ["Administrative", "Field Personnel", "Supervision", "Management"];
 const SAFETY_EQUIPMENT_OPTIONS = [
   "N/A",
@@ -450,8 +463,9 @@ export default async function EmployeeLibraryPage({
           <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
             <h2 className="text-lg font-semibold text-white">Employee Status Change</h2>
             <p className="mt-1 text-xs text-slate-400">
-              Third step after Project Lead Details. Submitting emails HR, Tracks, and Safety. A new
-              site here also updates the employee&apos;s Site on the grid.
+              Third step after Project Lead Details. Submitting updates this employee&apos;s record (site,
+              job number, employment type, driving record, credit card, and Inactive for a layoff) and
+              emails HR, Tracks, and Safety the completed form as a PDF.
             </p>
             <form action={submitStatusChange} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <input type="hidden" name="employeeId" value={e.id} />
@@ -460,7 +474,14 @@ export default async function EmployeeLibraryPage({
                 <input type="date" name="effectiveDate" className={inputCls} />
               </PLField>
               <PLField label="Reason for Change">
-                <input name="reasonForChange" className={inputCls} />
+                <select name="reasonForChange" defaultValue="" className={inputCls}>
+                  <option value="">—</option>
+                  {STATUS_CHANGE_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </PLField>
 
               <div className="sm:col-span-2">

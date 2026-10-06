@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
-import { notifyStatusChangeSubmitted } from "@/lib/notifications";
+import { notifyFlagTransitions, notifyStatusChangeSubmitted } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 
 const str = (form: FormData, key: string): string | null => {
@@ -21,10 +21,13 @@ const dateOrNull = (form: FormData, key: string): Date | null => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
+const LAYOFF_REASONS = new Set(["Involuntary Layoff", "Voluntary Layoff"]);
+
 // Third step of the onboarding flow, after Project Lead Details: a PL/PM
 // (assigned to this employee) or an Admin/Super Admin records a status
-// change. `newSite` -- if given -- is applied onto Employee.site so the
-// grid reflects it immediately.
+// change. Every answered field that has a home on the employee record is
+// applied to it, so the Data Grid reflects the change immediately; blanks
+// never erase what's already there.
 export async function submitStatusChange(form: FormData): Promise<void> {
   const me = await getCurrentUser();
   if (!me) throw new Error("Not authenticated");
@@ -32,7 +35,14 @@ export async function submitStatusChange(form: FormData): Promise<void> {
   const employeeId = String(form.get("employeeId") ?? "");
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { projectLeadEmail: true, projectManagerEmail: true, createdById: true },
+    select: {
+      projectLeadEmail: true,
+      projectManagerEmail: true,
+      createdById: true,
+      frcNeeded: true,
+      emailNeeded: true,
+      creditCardApproved: true,
+    },
   });
   if (!employee) throw new Error("Employee not found");
   if (!isAdminRole(me.role) && !isAssignedProjectLeadOrManager(me, employee)) {
@@ -40,7 +50,6 @@ export async function submitStatusChange(form: FormData): Promise<void> {
   }
 
   const employmentType = form.getAll("employmentType").map(String).join(", ") || null;
-  const newSite = str(form, "newSite");
 
   const data = {
     employeeId,
@@ -49,7 +58,7 @@ export async function submitStatusChange(form: FormData): Promise<void> {
     employmentType,
     fromJobNumber: str(form, "fromJobNumber"),
     toJobNumber: str(form, "toJobNumber"),
-    newSite,
+    newSite: str(form, "newSite"),
     detailsOfChange: str(form, "detailsOfChange"),
     drivingRecordRequired: bool(form, "drivingRecordRequired"),
     creditCardRequested: bool(form, "creditCardRequested"),
@@ -61,12 +70,26 @@ export async function submitStatusChange(form: FormData): Promise<void> {
     submittedByName: me.name || me.email,
   };
 
-  await prisma.$transaction([
+  const apply: Record<string, unknown> = {};
+  if (data.newSite) {
+    apply.site = data.newSite;
+    apply.jobSite = data.newSite;
+  }
+  if (data.toJobNumber) apply.jobNumber = data.toJobNumber;
+  if (data.employmentType) apply.employmentType = data.employmentType;
+  if (data.drivingRecordRequired !== null) apply.drivingRecordRequired = data.drivingRecordRequired;
+  if (data.creditCardApprovedByGm !== null) apply.creditCardApproved = data.creditCardApprovedByGm;
+  if (data.reasonForChange && LAYOFF_REASONS.has(data.reasonForChange)) apply.active = false;
+
+  const [created] = await prisma.$transaction([
     prisma.statusChangeRequest.create({ data }),
-    ...(newSite ? [prisma.employee.update({ where: { id: employeeId }, data: { site: newSite } })] : []),
+    ...(Object.keys(apply).length > 0 ? [prisma.employee.update({ where: { id: employeeId }, data: apply })] : []),
   ]);
 
-  await notifyStatusChangeSubmitted(employeeId, me, data);
+  await notifyFlagTransitions(employeeId, employee, {
+    creditCardApproved: apply.creditCardApproved as boolean | undefined,
+  });
+  await notifyStatusChangeSubmitted(created);
 
   revalidatePath(`/admin/employee/${employeeId}`);
   revalidatePath("/admin/grid");
