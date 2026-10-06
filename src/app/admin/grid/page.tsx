@@ -186,7 +186,7 @@ export default async function GridPage({
     gridCols.filter(show).length + (show("payRate") ? 1 : 0) + (show("billRate") ? 1 : 0);
 
   const th =
-    "border border-white/10 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 whitespace-nowrap";
+    "sticky top-0 z-10 border border-white/10 bg-slate-900 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 whitespace-nowrap shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
   const td = "border border-white/10 px-2 py-1.5 align-top text-slate-200";
 
   return (
@@ -222,9 +222,11 @@ export default async function GridPage({
           archivedCount={all.filter((e) => e.archived).length}
         />
 
-        <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+        {/* Scrolls inside its own box (both directions) so the header row and
+            the horizontal scrollbar stay on screen however long the list is. */}
+        <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full border-collapse text-sm">
-            <thead className="bg-slate-900/80">
+            <thead>
               <tr>
                 {show("name") && <th className={th}>Employee</th>}
                 {show("site") && <th className={th}>Site</th>}
