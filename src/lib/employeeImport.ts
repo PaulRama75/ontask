@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
 export const MAX_IMPORT_ROWS = 500;
@@ -51,10 +52,11 @@ export type ImportRecord = {
   ssn: string | null;
   safetyCouncilExpiry: Date | null;
   twicExpiry: Date | null;
-  active: boolean;
+  // null = cell left blank: "Yes" for a new employee, unchanged for an update.
+  active: boolean | null;
 };
 
-export type ParsedRow = { row: number; record: ImportRecord; errors: string[]; duplicateOf: string | null };
+export type ParsedRow = { row: number; record: ImportRecord; errors: string[] };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -206,10 +208,10 @@ export async function parseImportFile(file: { name: string; buffer: Buffer }): P
       ssn: str(raw.ssn ?? null),
       safetyCouncilExpiry: safety.value,
       twicExpiry: twic.value,
-      active: !(activeRaw && ["no", "n", "false", "0", "inactive"].includes(activeRaw)),
+      active: activeRaw ? !["no", "n", "false", "0", "inactive"].includes(activeRaw) : null,
     };
     if (!record.firstName && !record.lastName) errors.push("First or Last Name is required");
-    out.push({ row: r + 1, record, errors, duplicateOf: null });
+    out.push({ row: r + 1, record, errors });
   }
   if (out.length === 0) throw new Error("No employee rows found under the header row.");
   if (out.length > MAX_IMPORT_ROWS) throw new Error(`Too many rows (${out.length}); the limit is ${MAX_IMPORT_ROWS} per file.`);
@@ -219,43 +221,223 @@ export async function parseImportFile(file: { name: string; buffer: Buffer }): P
 const nameKey = (r: { firstName: string | null; lastName: string | null }) =>
   [r.firstName, r.lastName].filter(Boolean).join(" ").trim().toLowerCase();
 
-// Marks rows that share an email or full name with an existing employee or an
-// earlier row in the same file.
-export async function flagDuplicates(rows: ParsedRow[]): Promise<void> {
-  const existing = await prisma.employee.findMany({ select: { firstName: true, lastName: true, email: true } });
-  const byEmail = new Map<string, string>();
-  const byName = new Map<string, string>();
-  for (const e of existing) {
-    const em = e.email?.trim().toLowerCase();
-    if (em) byEmail.set(em, "an existing employee");
-    const nm = nameKey(e);
-    if (nm) byName.set(nm, "an existing employee");
+// Fields an import may overwrite on an existing employee. Email is the match
+// key, so it's never changed; documents, approvals, archive and onboarding
+// status are never touched.
+const UPDATABLE = [
+  "firstName",
+  "lastName",
+  "phone",
+  "addressLine1",
+  "addressLine2",
+  "city",
+  "state",
+  "zip",
+  "site",
+  "hireDate",
+  "payRate",
+  "billRate",
+  "projectLeadEmail",
+  "projectManagerEmail",
+  "driversLicenseNumber",
+  "ssn",
+  "safetyCouncilExpiry",
+  "twicExpiry",
+  "active",
+] as const;
+type UpdatableKey = (typeof UPDATABLE)[number];
+
+const LABEL: Record<UpdatableKey, string> = Object.fromEntries(
+  IMPORT_COLUMNS.filter((c) => (UPDATABLE as readonly string[]).includes(c.key)).map((c) => [c.key, c.header]),
+) as Record<UpdatableKey, string>;
+
+type FieldValue = string | number | boolean | Date | null;
+
+function same(a: FieldValue, b: FieldValue): boolean {
+  if (a instanceof Date || b instanceof Date) {
+    const ad = a instanceof Date ? a.toISOString().slice(0, 10) : null;
+    const bd = b instanceof Date ? b.toISOString().slice(0, 10) : null;
+    return ad === bd;
   }
-  for (const r of rows) {
-    if (r.errors.length) continue;
-    const em = r.record.email;
-    const nm = nameKey(r.record);
-    const hit = (em && byEmail.get(em)) || (nm && byName.get(nm)) || null;
-    if (hit) r.duplicateOf = hit;
-    if (em && !byEmail.has(em)) byEmail.set(em, `row ${r.row}`);
-    if (nm && !byName.has(nm)) byName.set(nm, `row ${r.row}`);
-  }
+  if (typeof a === "string" && typeof b === "string") return a.trim() === b.trim();
+  return a === b;
 }
 
-// Previous employees skip onboarding entirely: no link, no emails, created as Approved.
-export async function importRows(rows: ParsedRow[], createdById: string): Promise<number> {
+function display(key: UpdatableKey, v: FieldValue): string {
+  if (v == null || v === "") return "(blank)";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (key === "ssn") return `***-**-${String(v).replace(/\D/g, "").slice(-4)}`;
+  return String(v);
+}
+
+export type Change = { field: string; from: string; to: string };
+
+export type ClassifiedRow = ParsedRow & {
+  action: "update" | "new" | "unchanged" | "skip";
+  reason: string | null;
+  matchId: string | null;
+  changes: Change[];
+  // Only the changed, non-blank fields -- what gets written for an update.
+  data: Prisma.EmployeeUncheckedUpdateInput;
+};
+
+// Sorts every row into one of four groups so the same person is never added
+// twice:
+//   update    - email matches exactly one existing employee and something differs
+//   unchanged - email matches, but every filled-in value is already the same
+//   new       - no email match and the name isn't already on file
+//   skip      - bad data, or matching would be a guess (see reasons below)
+// allowNameMatches lets a row whose name matches someone already on file be
+// added anyway, but only when it has its own, different email.
+export async function classifyRows(rows: ParsedRow[], opts: { allowNameMatches: boolean }): Promise<ClassifiedRow[]> {
+  const existing = await prisma.employee.findMany({
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      state: true,
+      zip: true,
+      site: true,
+      hireDate: true,
+      payRate: true,
+      billRate: true,
+      projectLeadEmail: true,
+      projectManagerEmail: true,
+      driversLicenseNumber: true,
+      ssn: true,
+      safetyCouncilExpiry: true,
+      twicExpiry: true,
+      active: true,
+    },
+  });
+  const byEmail = new Map<string, typeof existing>();
+  const existingNames = new Set<string>();
+  for (const e of existing) {
+    const em = e.email?.trim().toLowerCase();
+    if (em) byEmail.set(em, [...(byEmail.get(em) ?? []), e]);
+    const nm = nameKey(e);
+    if (nm) existingNames.add(nm);
+  }
+
+  const seenEmail = new Map<string, number>();
+  const seenName = new Map<string, number>();
+  const out: ClassifiedRow[] = [];
+
+  for (const r of rows) {
+    const base = { ...r, reason: null, matchId: null, changes: [] as Change[], data: {} };
+    const skip = (reason: string): ClassifiedRow => ({ ...base, action: "skip", reason });
+    if (r.errors.length) {
+      out.push(skip(r.errors.join("; ")));
+      continue;
+    }
+
+    const em = r.record.email;
+    const nm = nameKey(r.record);
+
+    if (em && seenEmail.has(em)) {
+      out.push(skip(`Same email as row ${seenEmail.get(em)}`));
+      continue;
+    }
+    if (em) seenEmail.set(em, r.row);
+
+    const matches = em ? (byEmail.get(em) ?? []) : [];
+    if (matches.length > 1) {
+      out.push(skip(`${matches.length} employees already share this email; fix them in the Data Grid first`));
+      continue;
+    }
+
+    if (matches.length === 1) {
+      const current = matches[0];
+      const data: Record<string, FieldValue> = {};
+      const changes: Change[] = [];
+      for (const key of UPDATABLE) {
+        const next = r.record[key] as FieldValue;
+        if (next == null || next === "") continue; // blank cells never erase
+        if (same(current[key], next)) continue;
+        data[key] = next;
+        changes.push({ field: LABEL[key], from: display(key, current[key]), to: display(key, next) });
+      }
+      if (nm) seenName.set(nm, r.row);
+      out.push({
+        ...base,
+        action: changes.length ? "update" : "unchanged",
+        matchId: current.id,
+        changes,
+        data: data as Prisma.EmployeeUncheckedUpdateInput,
+      });
+      continue;
+    }
+
+    // No email match: this would be a new employee.
+    if (nm && seenName.has(nm)) {
+      out.push(skip(`Same name as row ${seenName.get(nm)}`));
+      continue;
+    }
+    if (nm && existingNames.has(nm)) {
+      if (!em) {
+        out.push(skip("No email, and an employee with this name already exists (add their email to update them)"));
+        continue;
+      }
+      if (!opts.allowNameMatches) {
+        out.push(skip("An employee with this name already exists under a different email"));
+        continue;
+      }
+    }
+    if (nm) seenName.set(nm, r.row);
+    out.push({ ...base, action: "new" });
+  }
+  return out;
+}
+
+export type ApplyResult = { updated: number; created: number };
+
+export async function applyImport(
+  rows: ClassifiedRow[],
+  opts: { update: boolean; create: boolean; createdById: string },
+): Promise<ApplyResult> {
   const now = new Date();
-  const data = rows.map(({ record: r }) => ({
-    ...r,
-    status: "APPROVED",
-    source: "EXCEL",
-    approved: true,
-    approvedAt: now,
-    hrReviewed: true,
-    hrReviewedAt: now,
-    ratesAssignedAt: r.payRate != null && r.billRate != null ? now : null,
-    createdById,
-  }));
-  const res = await prisma.employee.createMany({ data });
-  return res.count;
+  const updates = opts.update ? rows.filter((r) => r.action === "update") : [];
+  const creates = opts.create ? rows.filter((r) => r.action === "new") : [];
+
+  const ops: Prisma.PrismaPromise<unknown>[] = updates.map((r) =>
+    prisma.employee.update({ where: { id: r.matchId! }, data: r.data }),
+  );
+  if (creates.length) {
+    // Previous employees skip onboarding entirely: no link, no emails, created as Approved.
+    ops.push(
+      prisma.employee.createMany({
+        data: creates.map(({ record: r }) => ({
+          ...r,
+          active: r.active ?? true,
+          status: "APPROVED",
+          source: "EXCEL",
+          approved: true,
+          approvedAt: now,
+          hrReviewed: true,
+          hrReviewedAt: now,
+          ratesAssignedAt: r.payRate != null && r.billRate != null ? now : null,
+          createdById: opts.createdById,
+        })),
+      }),
+    );
+  }
+  await prisma.$transaction(ops);
+
+  // Keep the onboarding workflow in step when an import completes both rates
+  // for someone still mid-onboarding (same rule as entering them by hand).
+  const rateIds = updates.filter((r) => "payRate" in r.data || "billRate" in r.data).map((r) => r.matchId!);
+  if (rateIds.length) {
+    await prisma.employee.updateMany({
+      where: { id: { in: rateIds }, status: { in: ["SUBMITTED", "HR_REVIEW"] }, payRate: { not: null }, billRate: { not: null } },
+      data: { status: "RATES_ASSIGNED", ratesAssignedAt: now },
+    });
+  }
+
+  return { updated: updates.length, created: creates.length };
 }

@@ -1,19 +1,16 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole } from "@/lib/rbac";
-import {
-  MAX_IMPORT_BYTES,
-  parseImportFile,
-  flagDuplicates,
-  importRows,
-} from "@/lib/employeeImport";
+import { MAX_IMPORT_BYTES, parseImportFile, classifyRows, applyImport } from "@/lib/employeeImport";
 
 export const dynamic = "force-dynamic";
 
-// Upload a spreadsheet of previous employees.
-//   mode=preview  parse + validate only, nothing is saved
-//   mode=import   save valid rows (rows that look like duplicates are skipped
-//                 unless allowDuplicates=1)
+// Upload the employee spreadsheet. Each row is matched to existing employees
+// by email and sorted into update / new / unchanged / skip.
+//   mode=preview  parse + classify only, nothing is saved
+//   mode=import   apply: update=1 updates matched employees, create=1 adds
+//                 new ones; allowNameMatches=1 also adds people whose name is
+//                 already on file under a different email
 // Admin, Super Admin and HR only.
 export async function POST(req: Request) {
   const me = await getCurrentUser();
@@ -24,7 +21,9 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const file = form.get("file");
   const mode = form.get("mode") === "import" ? "import" : "preview";
-  const allowDuplicates = form.get("allowDuplicates") === "1";
+  const update = form.get("update") !== "0";
+  const create = form.get("create") !== "0";
+  const allowNameMatches = form.get("allowNameMatches") === "1";
   if (!(file instanceof File) || file.size === 0) {
     return Response.json({ error: "Choose an .xlsx or .csv file." }, { status: 400 });
   }
@@ -35,43 +34,41 @@ export async function POST(req: Request) {
     return Response.json({ error: "File is larger than 5 MB." }, { status: 400 });
   }
 
-  let rows;
+  let parsed;
   try {
-    rows = await parseImportFile({ name: file.name, buffer: Buffer.from(await file.arrayBuffer()) });
+    parsed = await parseImportFile({ name: file.name, buffer: Buffer.from(await file.arrayBuffer()) });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : "Could not read the file." }, { status: 400 });
   }
-  await flagDuplicates(rows);
-
-  const invalid = rows.filter((r) => r.errors.length > 0);
-  const duplicates = rows.filter((r) => r.errors.length === 0 && r.duplicateOf);
-  const importable = rows.filter((r) => r.errors.length === 0 && (allowDuplicates || !r.duplicateOf));
+  const rows = await classifyRows(parsed, { allowNameMatches });
+  const of = (a: string) => rows.filter((r) => r.action === a);
+  const counts = { update: of("update").length, new: of("new").length, unchanged: of("unchanged").length, skip: of("skip").length };
 
   if (mode === "import") {
-    const created = await importRows(importable, me.id);
+    const result = await applyImport(rows, { update, create, createdById: me.id });
     revalidatePath("/admin");
     revalidatePath("/admin/grid");
-    return Response.json({ imported: created, skippedInvalid: invalid.length, skippedDuplicates: allowDuplicates ? 0 : duplicates.length });
+    return Response.json({ ...result, unchanged: counts.unchanged, skipped: counts.skip });
   }
 
   const name = (r: (typeof rows)[number]) => [r.record.firstName, r.record.lastName].filter(Boolean).join(" ") || "(no name)";
   return Response.json({
     total: rows.length,
-    willImport: importable.length,
-    invalid: invalid.length,
-    duplicates: duplicates.length,
-    sample: importable.slice(0, 8).map((r) => ({
-      row: r.row,
-      name: name(r),
-      email: r.record.email,
-      site: r.record.site,
-      hireDate: r.record.hireDate ? r.record.hireDate.toISOString().slice(0, 10) : null,
-    })),
-    issues: [
-      ...invalid.map((r) => ({ row: r.row, name: name(r), message: r.errors.join("; ") })),
-      ...duplicates.map((r) => ({ row: r.row, name: name(r), message: `Looks like a duplicate of ${r.duplicateOf}` })),
-    ]
-      .sort((a, b) => a.row - b.row)
-      .slice(0, 50),
+    counts,
+    updates: of("update")
+      .slice(0, 20)
+      .map((r) => ({ row: r.row, name: name(r), email: r.record.email, changes: r.changes })),
+    newRows: of("new")
+      .slice(0, 8)
+      .map((r) => ({
+        row: r.row,
+        name: name(r),
+        email: r.record.email,
+        site: r.record.site,
+        hireDate: r.record.hireDate ? r.record.hireDate.toISOString().slice(0, 10) : null,
+      })),
+    issues: of("skip")
+      .slice(0, 50)
+      .map((r) => ({ row: r.row, name: name(r), message: r.reason ?? "Skipped" })),
   });
 }

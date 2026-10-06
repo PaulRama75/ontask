@@ -38,9 +38,11 @@ export async function GET() {
     "Delete the example row before uploading.",
     "Only First Name or Last Name is required; every other column is optional.",
     "Dates: YYYY-MM-DD or MM/DD/YYYY. Rates: plain numbers ($ and commas are fine).",
-    "Active: Yes or No (blank means Yes).",
-    "Imported employees are created as Approved. No onboarding link and no emails are sent.",
-    "Rows matching an existing employee's email or full name are skipped as duplicates unless you choose to import them.",
+    "Active: Yes or No. Blank means Yes for a new employee and no change for an existing one.",
+    "Rows are matched to existing employees by Email. A match UPDATES that employee: only filled-in cells change anything, blank cells are left alone.",
+    "Rows with no email match are added as new employees: created as Approved, no onboarding link and no emails sent.",
+    "Skipped (and listed in the preview): the same email twice in the file, or a name that's already on file with no email or a different email.",
+    "Documents, approvals, archive status and onboarding status are never changed by an import.",
   ].forEach((t) => notes.addRow([t]));
   notes.getColumn(1).width = 110;
 
