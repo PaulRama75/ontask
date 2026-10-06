@@ -149,19 +149,44 @@ async function readSheet(file: { name: string; buffer: Buffer }): Promise<Cell[]
   return rows;
 }
 
-export async function parseImportFile(file: { name: string; buffer: Buffer }): Promise<ParsedRow[]> {
+// How each header in the uploaded file was understood, so the preview can show
+// it for checking before anything is saved.
+export type ColumnMapping = {
+  mapped: { header: string; field: string }[];
+  ignored: { header: string; reason: string }[];
+};
+
+export async function parseImportFile(
+  file: { name: string; buffer: Buffer },
+): Promise<{ rows: ParsedRow[]; columns: ColumnMapping }> {
   const sheet = await readSheet(file);
   const headerIdx = sheet.findIndex((r) => r && r.some((c) => c != null));
   if (headerIdx < 0) throw new Error("The file is empty.");
 
   const colByIndex = new Map<number, ColKey>();
+  const firstHeaderFor = new Map<ColKey, string>();
+  const columns: ColumnMapping = { mapped: [], ignored: [] };
   sheet[headerIdx].forEach((h, i) => {
-    const key = h == null ? undefined : headerLookup.get(norm(String(h)));
-    if (key) colByIndex.set(i, key);
+    if (h == null) return;
+    const header = String(h).trim();
+    const key = headerLookup.get(norm(header));
+    if (!key) {
+      columns.ignored.push({ header, reason: "not a recognized column" });
+    } else if (firstHeaderFor.has(key)) {
+      // Two headers for one field: keep the first so the result is predictable.
+      columns.ignored.push({ header, reason: `duplicate of "${firstHeaderFor.get(key)}"` });
+    } else {
+      firstHeaderFor.set(key, header);
+      colByIndex.set(i, key);
+      columns.mapped.push({ header, field: IMPORT_COLUMNS.find((c) => c.key === key)!.header });
+    }
   });
   const present = new Set(colByIndex.values());
   if (!present.has("firstName") && !present.has("lastName")) {
     throw new Error('Header row must include "First Name" and "Last Name" columns (use the template).');
+  }
+  if (!present.has("email")) {
+    throw new Error('No "Email" column found. Employees are matched by email, so the file needs an Email column (use the template).');
   }
 
   const out: ParsedRow[] = [];
@@ -215,7 +240,7 @@ export async function parseImportFile(file: { name: string; buffer: Buffer }): P
   }
   if (out.length === 0) throw new Error("No employee rows found under the header row.");
   if (out.length > MAX_IMPORT_ROWS) throw new Error(`Too many rows (${out.length}); the limit is ${MAX_IMPORT_ROWS} per file.`);
-  return out;
+  return { rows: out, columns };
 }
 
 const nameKey = (r: { firstName: string | null; lastName: string | null }) =>
@@ -284,9 +309,12 @@ export type ClassifiedRow = ParsedRow & {
 
 // Sorts every row into one of four groups so the same person is never added
 // twice:
-//   update    - email matches exactly one existing employee and something differs
-//   unchanged - email matches, but every filled-in value is already the same
-//   new       - no email match and the name isn't already on file
+//   update    - matched one existing employee and something differs. A match is
+//               the email on file, or -- when the email isn't on file yet --
+//               the one employee with this exact name who has no email (their
+//               email gets filled in)
+//   unchanged - matched, but every filled-in value is already the same
+//   new       - no match and the name isn't already on file
 //   skip      - bad data, or matching would be a guess (see reasons below)
 // allowNameMatches lets a row whose name matches someone already on file be
 // added anyway, but only when it has its own, different email.
@@ -316,22 +344,59 @@ export async function classifyRows(rows: ParsedRow[], opts: { allowNameMatches: 
       active: true,
     },
   });
-  const byEmail = new Map<string, typeof existing>();
-  const existingNames = new Set<string>();
+  type Existing = (typeof existing)[number];
+  const byEmail = new Map<string, Existing[]>();
+  const byName = new Map<string, Existing[]>();
   for (const e of existing) {
     const em = e.email?.trim().toLowerCase();
     if (em) byEmail.set(em, [...(byEmail.get(em) ?? []), e]);
     const nm = nameKey(e);
-    if (nm) existingNames.add(nm);
+    if (nm) byName.set(nm, [...(byName.get(nm) ?? []), e]);
   }
 
   const seenEmail = new Map<string, number>();
   const seenName = new Map<string, number>();
+  const seenEmployee = new Map<string, number>();
   const out: ClassifiedRow[] = [];
 
+  // Builds the update for a matched employee: only filled-in cells that differ.
+  // fillEmail is set when the match was made by name onto someone with no
+  // email on file -- the import then records their email too.
+  const toUpdate = (base: ClassifiedRow, r: ParsedRow, current: Existing, fillEmail: string | null): ClassifiedRow => {
+    const data: Record<string, FieldValue> = {};
+    const changes: Change[] = [];
+    if (fillEmail) {
+      data.email = fillEmail;
+      changes.push({ field: "Email", from: "(blank)", to: fillEmail });
+    }
+    for (const key of UPDATABLE) {
+      const next = r.record[key] as FieldValue;
+      if (next == null || next === "") continue; // blank cells never erase
+      if (same(current[key], next)) continue;
+      data[key] = next;
+      changes.push({ field: LABEL[key], from: display(key, current[key]), to: display(key, next) });
+    }
+    return {
+      ...base,
+      action: changes.length ? "update" : "unchanged",
+      matchId: current.id,
+      changes,
+      data: data as Prisma.EmployeeUncheckedUpdateInput,
+    };
+  };
+
   for (const r of rows) {
-    const base = { ...r, reason: null, matchId: null, changes: [] as Change[], data: {} };
+    const base: ClassifiedRow = { ...r, action: "skip", reason: null, matchId: null, changes: [], data: {} };
     const skip = (reason: string): ClassifiedRow => ({ ...base, action: "skip", reason });
+    // One row per employee: a second row reaching the same person (by email
+    // or by name) is skipped so two rows can't fight over one record.
+    const claim = (row: ClassifiedRow): ClassifiedRow => {
+      if (!row.matchId) return row;
+      const prior = seenEmployee.get(row.matchId);
+      if (prior) return skip(`Same employee as row ${prior}`);
+      seenEmployee.set(row.matchId, r.row);
+      return row;
+    };
     if (r.errors.length) {
       out.push(skip(r.errors.join("; ")));
       continue;
@@ -346,49 +411,47 @@ export async function classifyRows(rows: ParsedRow[], opts: { allowNameMatches: 
     }
     if (em) seenEmail.set(em, r.row);
 
-    const matches = em ? (byEmail.get(em) ?? []) : [];
-    if (matches.length > 1) {
-      out.push(skip(`${matches.length} employees already share this email; fix them in the Data Grid first`));
+    // 1) Email already on file -> that employee.
+    const emailMatches = em ? (byEmail.get(em) ?? []) : [];
+    if (emailMatches.length > 1) {
+      out.push(skip(`${emailMatches.length} employees already share this email; fix them in the Data Grid first`));
       continue;
     }
-
-    if (matches.length === 1) {
-      const current = matches[0];
-      const data: Record<string, FieldValue> = {};
-      const changes: Change[] = [];
-      for (const key of UPDATABLE) {
-        const next = r.record[key] as FieldValue;
-        if (next == null || next === "") continue; // blank cells never erase
-        if (same(current[key], next)) continue;
-        data[key] = next;
-        changes.push({ field: LABEL[key], from: display(key, current[key]), to: display(key, next) });
-      }
+    if (emailMatches.length === 1) {
       if (nm) seenName.set(nm, r.row);
-      out.push({
-        ...base,
-        action: changes.length ? "update" : "unchanged",
-        matchId: current.id,
-        changes,
-        data: data as Prisma.EmployeeUncheckedUpdateInput,
-      });
+      out.push(claim(toUpdate(base, r, emailMatches[0], null)));
       continue;
     }
 
-    // No email match: this would be a new employee.
+    // 2) Email not on file: look at who already has this name.
     if (nm && seenName.has(nm)) {
       out.push(skip(`Same name as row ${seenName.get(nm)}`));
       continue;
     }
-    if (nm && existingNames.has(nm)) {
+    const nameMatches = nm ? (byName.get(nm) ?? []) : [];
+    if (nameMatches.length > 0) {
       if (!em) {
-        out.push(skip("No email, and an employee with this name already exists (add their email to update them)"));
+        out.push(skip("No email in this row, and an employee with this name already exists (add their email to update them)"));
+        continue;
+      }
+      const noEmailOnFile = nameMatches.filter((e) => !e.email?.trim());
+      if (nameMatches.length === 1 && noEmailOnFile.length === 1) {
+        // Same name, and the person on file has no email yet: it's them.
+        seenName.set(nm, r.row);
+        out.push(claim(toUpdate(base, r, noEmailOnFile[0], em)));
+        continue;
+      }
+      if (nameMatches.length > 1) {
+        out.push(skip(`${nameMatches.length} employees already have this name; can't tell which one this is`));
         continue;
       }
       if (!opts.allowNameMatches) {
-        out.push(skip("An employee with this name already exists under a different email"));
+        out.push(skip(`An employee with this name is already on file as ${nameMatches[0].email}`));
         continue;
       }
     }
+
+    // 3) Nobody matches: a new employee.
     if (nm) seenName.set(nm, r.row);
     out.push({ ...base, action: "new" });
   }

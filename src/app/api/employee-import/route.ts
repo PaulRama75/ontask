@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : "Could not read the file." }, { status: 400 });
   }
-  const rows = await classifyRows(parsed, { allowNameMatches });
+  const rows = await classifyRows(parsed.rows, { allowNameMatches });
   const of = (a: string) => rows.filter((r) => r.action === a);
   const counts = { update: of("update").length, new: of("new").length, unchanged: of("unchanged").length, skip: of("skip").length };
 
@@ -54,6 +54,7 @@ export async function POST(req: Request) {
   const name = (r: (typeof rows)[number]) => [r.record.firstName, r.record.lastName].filter(Boolean).join(" ") || "(no name)";
   return Response.json({
     total: rows.length,
+    columns: parsed.columns,
     counts,
     updates: of("update")
       .slice(0, 20)

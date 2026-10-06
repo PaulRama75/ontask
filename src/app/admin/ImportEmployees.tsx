@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 type Preview = {
   total: number;
+  columns: { mapped: { header: string; field: string }[]; ignored: { header: string; reason: string }[] };
   counts: { update: number; new: number; unchanged: number; skip: number };
   updates: { row: number; name: string; email: string | null; changes: { field: string; from: string; to: string }[] }[];
   newRows: { row: number; name: string; email: string | null; site: string | null; hireDate: string | null }[];
@@ -129,6 +130,37 @@ export default function ImportEmployees() {
 
       {preview && (
         <div className="mt-4 space-y-4 text-sm">
+          <details className="rounded-md border border-white/10 bg-slate-950/40 p-2 text-xs" open={preview.columns.ignored.length > 0}>
+            <summary className="cursor-pointer text-slate-300">
+              Column check: {preview.columns.mapped.length} column{preview.columns.mapped.length === 1 ? "" : "s"} matched
+              {preview.columns.ignored.length > 0 && (
+                <span className="text-amber-300">, {preview.columns.ignored.length} ignored</span>
+              )}
+            </summary>
+            <table className="mt-2 text-left">
+              <thead className="text-slate-500">
+                <tr>
+                  <th className="py-0.5 pr-6 font-normal">Your Excel column</th>
+                  <th className="py-0.5 font-normal">Saved as</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.columns.mapped.map((c) => (
+                  <tr key={c.header}>
+                    <td className="py-0.5 pr-6 text-slate-200">{c.header}</td>
+                    <td className="py-0.5 text-cyan-300">{c.field}</td>
+                  </tr>
+                ))}
+                {preview.columns.ignored.map((c) => (
+                  <tr key={`ignored-${c.header}`}>
+                    <td className="py-0.5 pr-6 text-slate-200">{c.header}</td>
+                    <td className="py-0.5 text-amber-300">Ignored ({c.reason})</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-300">{preview.counts.update} to update</span>
             <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">{preview.counts.new} new</span>
