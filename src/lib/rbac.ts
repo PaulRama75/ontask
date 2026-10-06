@@ -244,6 +244,7 @@ export const NAV_ITEMS = [
   { key: "onboarding", label: "Onboarding", href: "/admin" },
   { key: "invoices", label: "Invoices", href: "/admin/invoices" },
   { key: "timesheets", label: "Timesheets", href: "/admin/timesheets" },
+  { key: "travel", label: "Travel Requests", href: "/admin/travel-requests" },
 ] as const;
 
 export type NavKey = (typeof NAV_ITEMS)[number]["key"];
@@ -273,6 +274,8 @@ export function defaultNavVisible(role: Role, navKey: NavKey): boolean {
         role === "TRACKS" ||
         isAdminRole(role)
       );
+    case "travel":
+      return role === "PROJECT_MANAGER" || role === "PROJECT_LEAD" || isAdminRole(role);
     default:
       return false;
   }

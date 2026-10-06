@@ -66,8 +66,8 @@ export async function submitTravelRequest(form: FormData): Promise<void> {
     submittedByName: me.name || me.email,
   };
 
-  await prisma.travelRequest.create({ data });
-  await notifyTravelRequestSubmitted(employeeId, me, data);
+  const created = await prisma.travelRequest.create({ data });
+  await notifyTravelRequestSubmitted(created);
 
   redirect(`/admin/employee/${employeeId}?travelSent=1`);
 }

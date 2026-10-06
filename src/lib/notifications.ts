@@ -1,5 +1,7 @@
+import type { TravelRequest } from "@prisma/client";
 import { prisma } from "./prisma";
 import { sendEmail, emailButton } from "./email";
+import { buildTravelRequestPdf, travelPdfFileName } from "./travelPdf";
 
 // Fixed recipients requested by the business; env vars let each environment
 // (demo, local) point somewhere harmless without a code change.
@@ -49,7 +51,12 @@ async function hrRecipients(): Promise<string[]> {
 }
 
 // Notification failures must never break the action that triggered them.
-async function send(to: string[], subject: string, html: string): Promise<void> {
+async function send(
+  to: string[],
+  subject: string,
+  html: string,
+  attachments?: { filename: string; content: string }[],
+): Promise<void> {
   const recipients = [...new Set(to.map((t) => t.trim()).filter(Boolean))];
   if (recipients.length === 0) {
     console.warn("[notify] no recipients for:", subject);
@@ -58,7 +65,7 @@ async function send(to: string[], subject: string, html: string): Promise<void> 
   await Promise.all(
     recipients.map(async (r) => {
       try {
-        await sendEmail({ to: r, subject, html });
+        await sendEmail({ to: r, subject, html, attachments });
       } catch (err) {
         console.error("[notify] send failed", r, subject, err);
       }
@@ -89,30 +96,26 @@ ${employeeLink(e.id)}`,
 }
 
 // Travel request submitted (pre-filled from the grid, completed by PL/PM/Admin).
-export async function notifyTravelRequestSubmitted(
-  employeeId: string,
-  submittedBy: { name: string | null; email: string },
-  travel: {
-    jobNumber: string | null;
-    clientName: string | null;
-    fullName: string | null;
-    dateOfDeparture: Date | null;
-    dateOfReturn: Date | null;
-    departureLocation: string | null;
-    destinationLocation: string | null;
-    flightNeeded: boolean | null;
-    rentalCarNeeded: boolean | null;
-    additionalComments: string | null;
-  },
-): Promise<void> {
-  const e = await prisma.employee.findUnique({ where: { id: employeeId } });
+// The full form goes along as a PDF attachment.
+export async function notifyTravelRequestSubmitted(travel: TravelRequest): Promise<void> {
+  const e = await prisma.employee.findUnique({ where: { id: travel.employeeId } });
   if (!e) return;
+  const empName = fullName(e);
   const row = (label: string, v: string) =>
     v ? `<tr><td style="padding:2px 12px 2px 0;color:#94a3b8">${label}</td><td style="padding:2px 0">${v}</td></tr>` : "";
+
+  let attachments: { filename: string; content: string }[] | undefined;
+  try {
+    const pdf = await buildTravelRequestPdf(travel, empName);
+    attachments = [{ filename: travelPdfFileName(travel, empName), content: Buffer.from(pdf).toString("base64") }];
+  } catch (err) {
+    console.error("[notify] travel PDF generation failed; sending without attachment", err);
+  }
+
   await send(
     [TRAVEL_ADMIN_EMAIL],
-    `Travel request: ${travel.fullName || fullName(e)}`,
-    `<p>${submittedBy.name || submittedBy.email} submitted a travel request for <strong>${travel.fullName || fullName(e)}</strong>.</p>
+    `Travel request: ${travel.fullName || empName}`,
+    `<p>${travel.submittedByName} submitted a travel request for <strong>${travel.fullName || empName}</strong>. The full request is attached as a PDF.</p>
 <table style="border-collapse:collapse;font-size:14px">
 ${row("FER Job Number", travel.jobNumber ?? "")}
 ${row("Client Name", travel.clientName ?? "")}
@@ -123,6 +126,7 @@ ${row("Rental car needed", travel.rentalCarNeeded == null ? "" : travel.rentalCa
 ${row("Comments", travel.additionalComments ?? "")}
 </table>
 ${employeeLink(e.id)}`,
+    attachments,
   );
 }
 

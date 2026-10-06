@@ -29,6 +29,20 @@ function YesNoSelect({ name, defaultValue }: { name: string; defaultValue?: stri
   );
 }
 
+// Same choices as the dropdowns on the OP-FORM-02 Word form.
+function Choice({ name, options }: { name: string; options: string[] }) {
+  return (
+    <select name={name} defaultValue="" className={inputCls}>
+      <option value="">—</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default async function TravelRequestPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
@@ -56,8 +70,8 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-white">Travel Request</h1>
         <p className="text-sm text-slate-400">
-          Pre-filled from {name || "the employee"}&apos;s record where available. Submitting emails the
-          Travel Administrator.
+          Pre-filled from {name || "the employee"}&apos;s record where available. Submitting saves it to
+          Travel Requests and emails the Travel Administrator a PDF copy.
         </p>
 
         <form
@@ -87,7 +101,7 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
                 <input type="date" name="dateOfBirth" className={inputCls} />
               </Field>
               <Field label="Gender">
-                <input name="gender" className={inputCls} />
+                <Choice name="gender" options={["Male", "Female"]} />
               </Field>
               <Field label="Known Traveler # (if applicable)">
                 <input name="knownTravelerNumber" className={inputCls} />
@@ -110,7 +124,7 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
                 <YesNoSelect name="flightNeeded" />
               </Field>
               <Field label="Travel Type">
-                <input name="travelType" placeholder="e.g. Round trip" className={inputCls} />
+                <Choice name="travelType" options={["Round Trip", "One Way"]} />
               </Field>
               <Field label="Date of Departure">
                 <input type="date" name="dateOfDeparture" className={inputCls} />
@@ -125,10 +139,10 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
                 <input name="destinationLocation" defaultValue={e.site ?? ""} className={inputCls} />
               </Field>
               <Field label="Window or Aisle Seat (if available)">
-                <input name="seatPreference" className={inputCls} />
+                <Choice name="seatPreference" options={["Window", "Aisle"]} />
               </Field>
               <Field label="Time of Travel Preference (if available)">
-                <input name="timePreference" className={inputCls} />
+                <Choice name="timePreference" options={["Morning", "Afternoon", "Evening", "Red Eye"]} />
               </Field>
             </div>
           </div>
@@ -142,7 +156,7 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
                 <YesNoSelect name="rentalCarNeeded" />
               </Field>
               <Field label="Rental Car Type">
-                <input name="rentalCarType" className={inputCls} />
+                <Choice name="rentalCarType" options={["Full Size Car", "Sport Utility Vehicle", "Pickup Truck"]} />
               </Field>
               <Field label="Pickup Location">
                 <input name="pickupLocation" className={inputCls} />
