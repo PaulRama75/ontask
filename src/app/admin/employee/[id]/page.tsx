@@ -16,7 +16,7 @@ import DocRow from "./DocRow";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
 import { submitStatusChange } from "./status-change/actions";
-import { generateTimesheetLink, revokeTimesheetLink } from "./timesheet-link/actions";
+import { generateTimesheetLink, resendTimesheetLink, revokeTimesheetLink } from "./timesheet-link/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -627,14 +627,23 @@ export default async function EmployeeLibraryPage({
               </Link>
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              Share this link with {name || "the employee"} so they can enter their own weekly time --
-              no password, and no access to anything else in this app.
+              A private link {name || "the employee"} uses to enter their own weekly time -- no password,
+              and no access to anything else in this app.{" "}
+              {e.email
+                ? `Generating a link emails it to ${e.email}.`
+                : "There's no email on file, so copy the link and send it to them yourself."}
             </p>
             {timesheetToken && !timesheetToken.revokedAt ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <code className="rounded bg-slate-950/60 px-2 py-1 text-xs text-cyan-300 break-all">
                   {timesheetBase}/timesheet/{timesheetToken.token}
                 </code>
+                {e.email && (
+                  <form action={resendTimesheetLink}>
+                    <input type="hidden" name="employeeId" value={e.id} />
+                    <button className="text-xs text-cyan-300 hover:underline">Resend email</button>
+                  </form>
+                )}
                 <form action={revokeTimesheetLink}>
                   <input type="hidden" name="employeeId" value={e.id} />
                   <button className="text-xs text-rose-300 hover:underline">Revoke</button>
