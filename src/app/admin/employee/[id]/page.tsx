@@ -15,6 +15,8 @@ import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } fro
 import DocRow from "./DocRow";
 import PinUnlockLink from "../../PinUnlockLink";
 import PinConfirmButton from "../../PinConfirmButton";
+import SsnField from "../../SsnField";
+import { maskSsn, safeDecrypt } from "@/lib/crypto";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
 import { submitStatusChange } from "./status-change/actions";
@@ -559,7 +561,14 @@ export default async function EmployeeLibraryPage({
           <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <Detail label="Email" value={e.email} />
             <Detail label="Phone" value={e.phone} />
-            <Detail label="SSN" value={e.ssn} />
+            {canView(access, "ssn") && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">SSN</dt>
+                <dd className="text-white">
+                  <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
+                </dd>
+              </div>
+            )}
             <Detail label="Driver's license" value={e.driversLicenseNumber} />
             <Detail label="Address" value={[e.addressLine1, e.addressLine2, e.city, e.state, e.zip].filter(Boolean).join(", ")} />
             <Detail label="Safety Council ID" value={e.safetyCouncilId} />

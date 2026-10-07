@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
 import { prisma } from "./prisma";
+import { encSsn } from "./crypto";
 
 export const MAX_IMPORT_ROWS = 500;
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -203,7 +204,7 @@ export async function parseImportFile(file: { name: string; buffer: Buffer }): P
       projectLeadEmail: parseEmail(raw.projectLeadEmail ?? null, "Project Lead Email", errors),
       projectManagerEmail: parseEmail(raw.projectManagerEmail ?? null, "Project Manager Email", errors),
       driversLicenseNumber: str(raw.driversLicenseNumber ?? null),
-      ssn: str(raw.ssn ?? null),
+      ssn: encSsn(str(raw.ssn ?? null)),
       safetyCouncilExpiry: safety.value,
       twicExpiry: twic.value,
       active: !(activeRaw && ["no", "n", "false", "0", "inactive"].includes(activeRaw)),

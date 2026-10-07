@@ -339,30 +339,33 @@ export default async function InvoiceDetailPage({
           )}
 
           {isDraftEditable && siteEmployees.length > 0 && (
-            <form action={attachGridExport} className="mt-6 border-t border-white/10 pt-4">
-              <input type="hidden" name="invoiceId" value={invoice.id} />
+            <div className="mt-6 border-t border-white/10 pt-4">
               <p className="text-sm font-medium text-slate-300">Attach a grid snapshot for {invoice.site}</p>
-              <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-md border border-white/10 p-2">
-                {siteEmployees.map((e) => (
-                  <label key={e.id} className="flex items-center gap-2 text-sm text-slate-200">
-                    <input
-                      type="checkbox"
-                      name="employeeIds"
-                      value={e.id}
-                      defaultChecked
-                      className="border-white/10 bg-slate-800"
-                    />
-                    {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
-                  </label>
-                ))}
-              </div>
-              <button
-                type="submit"
+              <PinConfirmButton
+                action={attachGridExport}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage={`Attach a grid snapshot for ${invoice.site} to this invoice. SSNs are stored masked (last 4 only).`}
                 className="mt-2 rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+                inputs={
+                  <div className="max-h-40 w-full space-y-1 overflow-y-auto rounded-md border border-white/10 p-2">
+                    {siteEmployees.map((e) => (
+                      <label key={e.id} className="flex items-center gap-2 text-sm text-slate-200">
+                        <input
+                          type="checkbox"
+                          name="employeeIds"
+                          value={e.id}
+                          defaultChecked
+                          className="border-white/10 bg-slate-800"
+                        />
+                        {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
+                      </label>
+                    ))}
+                  </div>
+                }
               >
                 Attach grid snapshot
-              </button>
-            </form>
+              </PinConfirmButton>
+            </div>
           )}
         </section>
 

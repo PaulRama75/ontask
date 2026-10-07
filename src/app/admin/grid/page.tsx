@@ -27,6 +27,9 @@ import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
 import PinUnlockLink from "../PinUnlockLink";
 import PinConfirmButton from "../PinConfirmButton";
+import SsnField from "../SsnField";
+import SsnEditCell from "./SsnEditCell";
+import { maskSsn, safeDecrypt } from "@/lib/crypto";
 import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
@@ -131,12 +134,20 @@ export default async function GridPage({
     if (restrictedSites && !(e.site && restrictedSites.has(e.site))) return false;
     // Text search across the visible identity/contact fields + cert names.
     if (needle) {
+      // SSN is encrypted at rest, so decrypt it in SERVER scope only to build
+      // a search token (all digits + the last 4) — the decrypted value is used
+      // solely for matching here and is never written back onto the row objects
+      // handed to client cells. safeDecrypt returns null for legacy/corrupt
+      // rows, which simply contribute no SSN term (no throw).
+      const ssnPlain = safeDecrypt(e.ssn);
+      const ssnDigits = ssnPlain ? ssnPlain.replace(/\D/g, "") : "";
+      const ssnToken = ssnDigits ? `${ssnDigits} ${ssnDigits.slice(-4)}` : null;
       const haystack = [
         e.firstName,
         e.lastName,
         e.email,
         e.phone,
-        e.ssn,
+        ssnToken,
         e.addressLine1,
         e.addressLine2,
         e.city,
@@ -385,9 +396,9 @@ export default async function GridPage({
                     {show("ssn") && (
                       <td className={`${td} whitespace-nowrap`}>
                         {editable("ssn") ? (
-                          <EditableCell id={e.id} column="ssn" value={e.ssn} width="w-24" />
+                          <SsnEditCell employeeId={e.id} ssnMasked={maskSsn(safeDecrypt(e.ssn))} />
                         ) : (
-                          e.ssn || "—"
+                          <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
                         )}
                       </td>
                     )}

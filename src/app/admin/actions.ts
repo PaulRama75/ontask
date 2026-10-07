@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { notifyFlagTransitions, notifyProjectLeadDetailsSaved } from "@/lib/notifications";
 import { requirePin } from "@/lib/auth";
+import { encSsn } from "@/lib/crypto";
 import type { GatedResult } from "@/lib/gatedResult";
 
 // Shared PIN step for the gated actions below. Maps requirePin's failure
@@ -272,6 +273,39 @@ export async function setEmployeeField(formData: FormData): Promise<void> {
 
   await prisma.employee.update({ where: { id }, data });
   revalidatePath("/admin/grid");
+}
+
+// Dedicated, PIN-gated write for the SSN column (Rule 2 — setEmployeeField is
+// left untouched). The grid SSN edit cell never defaults to the stored value,
+// so an empty submit means "leave unchanged" (no-op) rather than clearing it;
+// clearing is an explicit affordance that submits clear="1" and maps to null.
+// A non-empty value is encrypted at rest via encSsn. The column-level write
+// authorization (canEdit("ssn") + PL/PM employee scope) is enforced via the
+// shared requireColumn helper, converted to a RETURN here per the GatedResult
+// contract; the PIN is checked immediately after and is strictly additive.
+export async function setEmployeeSsn(formData: FormData): Promise<GatedResult> {
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("ssn", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
+
+  const value = String(formData.get("value") ?? "").trim();
+  const clear = String(formData.get("clear") ?? "") === "1";
+
+  if (!clear && value === "") {
+    // Empty submit with no explicit clear: leave the stored SSN unchanged.
+    return { ok: true };
+  }
+
+  const data = clear ? { ssn: null } : { ssn: encSsn(value) };
+  await prisma.employee.update({ where: { id }, data });
+  revalidatePath("/admin/grid");
+  return { ok: true };
 }
 
 // Attach a document to an employee from the data grid. The column key both

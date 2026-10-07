@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requirePin } from "@/lib/auth";
 import { isAdminRole, getAccessMap, canView, getRestrictedSites, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
 import { saveInvoiceFile, getFile } from "@/lib/storage";
+import { maskSsn, safeDecrypt } from "@/lib/crypto";
 import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -437,7 +438,10 @@ function employeeFieldValue(e: ExportEmployee, key: string): string {
     case "phone":
       return e.phone ?? "";
     case "ssn":
-      return e.ssn ?? "";
+      // Never write a full SSN into the persisted CSV at rest — only the
+      // masked last-4 (design §3.4, Rule 4). safeDecrypt tolerates legacy
+      // plaintext and corrupt rows (→ "—") without throwing.
+      return maskSsn(safeDecrypt(e.ssn));
     case "driverLicense":
       return e.driversLicenseNumber ?? "";
     case "safetyExpiry":
@@ -473,16 +477,20 @@ function employeeFieldValue(e: ExportEmployee, key: string): string {
   }
 }
 
-export async function attachGridExport(form: FormData): Promise<void> {
-  const me = await requirePM();
+export async function attachGridExport(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
+
   const invoiceId = String(form.get("invoiceId") ?? "");
   const employeeIds = form.getAll("employeeIds").map(String);
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
-  if (!invoice) throw new Error("Invoice not found");
-  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
-  if (invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
-  if (employeeIds.length === 0) throw new Error("Select at least one employee to export.");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  if (invoice.status !== "DRAFT") return { ok: false, error: "Invoice is no longer editable." };
+  if (employeeIds.length === 0) return { ok: false, error: "Select at least one employee to export." };
 
   const access = await getAccessMap(me.role);
   const cols = EXPORT_KEYS.filter((k) => canView(access, k));
@@ -513,6 +521,7 @@ export async function attachGridExport(form: FormData): Promise<void> {
 
   await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
+  return { ok: true };
 }
 
 export async function submitInvoice(form: FormData): Promise<GatedResult> {

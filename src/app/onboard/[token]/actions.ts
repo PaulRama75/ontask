@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { saveFile } from "@/lib/storage";
 import { sendEmail, emailButton } from "@/lib/email";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
+import { encSsn } from "@/lib/crypto";
 import { revalidatePath } from "next/cache";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
@@ -87,7 +88,7 @@ export async function submitOnboarding(
       lastName: str(form, "lastName"),
       email: str(form, "email"),
       phone: str(form, "phone"),
-      ssn: str(form, "ssn"),
+      ssn: encSsn(str(form, "ssn")),
       addressLine1: str(form, "addressLine1"),
       addressLine2: str(form, "addressLine2"),
       city: str(form, "city"),
@@ -215,7 +216,7 @@ export async function saveOnboardingDraft(
       lastName: str(form, "lastName"),
       email: str(form, "email"),
       phone: str(form, "phone"),
-      ssn: str(form, "ssn"),
+      ssn: encSsn(str(form, "ssn")),
       addressLine1: str(form, "addressLine1"),
       addressLine2: str(form, "addressLine2"),
       city: str(form, "city"),
