@@ -47,6 +47,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             )}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <Link href="/admin/profile" className="text-slate-400 hover:text-white">
+              Profile
+            </Link>
             <span className="text-slate-400">
               {user.name || user.email}
               <span className="ml-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs font-medium text-cyan-300">
