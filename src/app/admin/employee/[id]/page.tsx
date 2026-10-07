@@ -10,6 +10,7 @@ import {
   isAdminRole,
   isAssignedProjectLeadOrManager,
   hasEmployeeDocumentGrant,
+  getNavAccess,
 } from "@/lib/rbac";
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 import DocRow from "./DocRow";
@@ -162,9 +163,13 @@ export default async function EmployeeLibraryPage({
       })
     : [];
 
-  const timesheetToken = isAdmin
+  // Admins, plus the Project Lead/Manager assigned to this employee, share
+  // the employee's timesheet link.
+  const canShareTimesheet = isAdmin || assignedToMe;
+  const timesheetToken = canShareTimesheet
     ? await prisma.employeeTimesheetToken.findUnique({ where: { employeeId: id } })
     : null;
+  const canSeeTimesheetsPage = canShareTimesheet && (await getNavAccess(me.role)).timesheets;
   const timesheetBase = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
   return (
@@ -639,13 +644,15 @@ export default async function EmployeeLibraryPage({
         </>
         )}
 
-        {isAdmin && (
+        {canShareTimesheet && (
           <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Timesheets</h2>
-              <Link href={`/admin/timesheets?employeeId=${e.id}`} className="text-sm text-cyan-400 hover:underline">
-                View timesheets →
-              </Link>
+              {canSeeTimesheetsPage && (
+                <Link href={`/admin/timesheets?employeeId=${e.id}`} className="text-sm text-cyan-400 hover:underline">
+                  View timesheets →
+                </Link>
+              )}
             </div>
             <p className="mt-1 text-xs text-slate-400">
               A private link {name || "the employee"} uses to enter their own weekly time -- no password,

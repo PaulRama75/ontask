@@ -2,14 +2,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole } from "@/lib/rbac";
+import { isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { sendEmail, emailButton } from "@/lib/email";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
 
-async function requireAdmin() {
+// Admins, or the Project Lead/Manager assigned to this employee.
+async function requireCanShare(employeeId: string) {
   const me = await getCurrentUser();
-  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  if (!me) throw new Error("Not authorized");
+  if (isAdminRole(me.role)) return me;
+  const e = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { projectLeadEmail: true, projectManagerEmail: true, createdById: true },
+  });
+  if (!e || !isAssignedProjectLeadOrManager(me, e)) throw new Error("Not authorized");
   return me;
 }
 
@@ -34,9 +41,9 @@ ${emailButton(url, "Open my timesheet")}`,
 // previously-shared link never becomes valid again. The new link is emailed
 // to the employee straight away.
 export async function generateTimesheetLink(form: FormData): Promise<void> {
-  await requireAdmin();
   const employeeId = String(form.get("employeeId") ?? "");
   if (!employeeId) return;
+  await requireCanShare(employeeId);
   const token = nanoid(32);
   await prisma.employeeTimesheetToken.upsert({
     where: { employeeId },
@@ -48,17 +55,18 @@ export async function generateTimesheetLink(form: FormData): Promise<void> {
 }
 
 export async function resendTimesheetLink(form: FormData): Promise<void> {
-  await requireAdmin();
   const employeeId = String(form.get("employeeId") ?? "");
+  if (!employeeId) return;
+  await requireCanShare(employeeId);
   const link = await prisma.employeeTimesheetToken.findUnique({ where: { employeeId } });
   if (!link || link.revokedAt) return;
   await emailTimesheetLink(employeeId, link.token);
 }
 
 export async function revokeTimesheetLink(form: FormData): Promise<void> {
-  await requireAdmin();
   const employeeId = String(form.get("employeeId") ?? "");
   if (!employeeId) return;
+  await requireCanShare(employeeId);
   await prisma.employeeTimesheetToken.update({
     where: { employeeId },
     data: { revokedAt: new Date() },
