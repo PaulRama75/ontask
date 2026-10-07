@@ -122,15 +122,18 @@ export async function createInvoice(
   if (!site) return { ok: false, error: "Site is required." };
   if (!clientEmail) return { ok: false, error: "Client email is required." };
 
+  // The shared Client row is never renamed here: the name typed on a new
+  // invoice belongs to that invoice only.
   const client = await prisma.client.upsert({
     where: { email_site: { email: clientEmail, site } },
-    update: clientName ? { name: clientName } : {},
+    update: {},
     create: { name: clientName || deriveClientName(clientEmail), email: clientEmail, site },
   });
 
   const invoice = await prisma.invoice.create({
     data: {
       clientId: client.id,
+      clientName: clientName || client.name,
       site,
       jobNumber,
       poNumber,
@@ -145,9 +148,7 @@ export async function createInvoice(
   redirect(`/admin/invoices/${invoice.id}`);
 }
 
-// Corrects the client's display name (e.g. an auto-derived name that came
-// out wrong). Edits the shared Client record, so it applies to every
-// invoice for that client/site, not just this one.
+// Changes the client name shown on THIS invoice only.
 export async function updateClientName(form: FormData): Promise<void> {
   const me = await requirePM();
   const invoiceId = String(form.get("invoiceId") ?? "");
@@ -158,7 +159,7 @@ export async function updateClientName(form: FormData): Promise<void> {
   if (!invoice) throw new Error("Invoice not found");
   if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
 
-  await prisma.client.update({ where: { id: invoice.clientId }, data: { name } });
+  await prisma.invoice.update({ where: { id: invoiceId }, data: { clientName: name } });
   await touchInvoice(invoiceId, me);
   revalidatePath(`/admin/invoices/${invoiceId}`);
   revalidatePath("/admin/invoices");
@@ -665,7 +666,7 @@ export async function sendInvoiceToClient(form: FormData): Promise<void> {
         `<tr><td>${escapeHtml(li.description)}</td><td style="text-align:right">$${li.amount.toFixed(2)}</td></tr>`,
     )
     .join("");
-  const html = `<p>Hello ${escapeHtml(invoice.client.name)},</p>
+  const html = `<p>Hello ${escapeHtml(invoice.clientName ?? invoice.client.name)},</p>
 <p>Please find your invoice for ${escapeHtml(invoice.site)} below.</p>
 <table cellpadding="6" style="border-collapse:collapse;width:100%">
 ${rows}

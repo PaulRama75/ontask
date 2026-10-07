@@ -40,7 +40,7 @@ export default async function BillingSummaryPage({
   const groups = new Map<string, Row>();
   for (const inv of invoices) {
     const total = inv.lineItems.reduce((sum, li) => sum + li.amount, 0);
-    const key = groupBy === "client" ? inv.client.name : inv.jobNumber || "(No job number)";
+    const key = groupBy === "client" ? (inv.clientName ?? inv.client.name) : inv.jobNumber || "(No job number)";
     const existing = groups.get(key);
     if (existing) {
       existing.total += total;

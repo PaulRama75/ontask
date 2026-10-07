@@ -273,6 +273,9 @@ model Invoice {
   id               String    @id @default(cuid())
   clientId         String
   client           Client    @relation(fields: [clientId], references: [id])
+  // This invoice's own client name (often carries a week-ending date). Kept
+  // per invoice so renaming one never renames the others sharing the Client.
+  clientName       String?
   site             String
   invoiceNumber    String?
   jobNumber        String?

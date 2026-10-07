@@ -86,7 +86,7 @@ export default async function InvoicesPage({
     if (inv.archived !== showArchived) return false;
     if (status !== "all" && inv.status !== status) return false;
     if (needle) {
-      const haystack = `${inv.site} ${inv.client.name}`.toLowerCase();
+      const haystack = `${inv.site} ${inv.clientName ?? inv.client.name}`.toLowerCase();
       if (!haystack.includes(needle)) return false;
     }
     return true;
@@ -98,7 +98,7 @@ export default async function InvoicesPage({
       case "site":
         return sign * a.site.localeCompare(b.site);
       case "client":
-        return sign * a.client.name.localeCompare(b.client.name);
+        return sign * (a.clientName ?? a.client.name).localeCompare(b.clientName ?? b.client.name);
       case "invoiceNumber":
         return sign * (a.invoiceNumber ?? "").localeCompare(b.invoiceNumber ?? "");
       case "jobNumber":
@@ -211,7 +211,7 @@ export default async function InvoicesPage({
                         {inv.site}
                       </Link>
                     </td>
-                    <td className={td}>{inv.client.name}</td>
+                    <td className={td}>{inv.clientName ?? inv.client.name}</td>
                     <td className={td}>{inv.invoiceNumber || "—"}</td>
                     <td className={td}>{inv.jobNumber || "—"}</td>
                     <td className={td}>${total.toFixed(2)}</td>

@@ -135,13 +135,13 @@ export default async function InvoiceDetailPage({
                       <input type="hidden" name="invoiceId" value={invoice.id} />
                       <input
                         name="clientName"
-                        defaultValue={invoice.client.name}
+                        defaultValue={invoice.clientName ?? invoice.client.name}
                         className="w-28 rounded border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
                       />
                       <button className="text-xs text-cyan-400 hover:underline">Save</button>
                     </form>
                   ) : (
-                    invoice.client.name
+                    invoice.clientName ?? invoice.client.name
                   )}
                 </td>
                 <td className="px-4 py-2">
