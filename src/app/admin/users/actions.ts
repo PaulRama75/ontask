@@ -1,15 +1,25 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { getCurrentUser, hashPassword, requirePin } from "@/lib/auth";
 import { ROLES, isAdminRole, ROLE_LABELS, type Role } from "@/lib/rbac";
 import { sendEmail, emailButton } from "@/lib/email";
 import { revalidatePath } from "next/cache";
+import type { GatedResult } from "@/lib/gatedResult";
 
 async function requireAdmin() {
   const me = await getCurrentUser();
   if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
   return me;
+}
+
+// Shared PIN step for the gated user actions below. Maps requirePin's failure
+// union onto the GatedResult channel (NO_PIN -> pinRequired). Returns null on
+// success so the caller proceeds with the mutation.
+async function checkPin(form: FormData): Promise<{ ok: false; error: string; pinRequired?: boolean } | null> {
+  const pin = await requirePin(String(form.get("pin") ?? ""));
+  if (!pin.ok) return { ok: false, error: pin.error, pinRequired: pin.code === "NO_PIN" };
+  return null;
 }
 
 export type UserActionResult = { ok: boolean; error?: string };
@@ -51,30 +61,42 @@ ${emailButton(url, "Sign In")}
   return { ok: true };
 }
 
-export async function setUserRole(form: FormData): Promise<void> {
-  await requireAdmin();
+export async function setUserRole(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("userId") ?? "");
   const role = String(form.get("role") ?? "");
-  if (!id || !ROLES.includes(role as (typeof ROLES)[number])) return;
+  if (!id || !ROLES.includes(role as (typeof ROLES)[number])) return { ok: false, error: "Invalid role." };
   await prisma.user.update({ where: { id }, data: { role } });
   revalidatePath("/admin/users");
+  return { ok: true };
 }
 
-export async function setUserActive(form: FormData): Promise<void> {
-  const me = await requireAdmin();
+export async function setUserActive(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("userId") ?? "");
   const active = String(form.get("active") ?? "") === "true";
-  if (!id || id === me.id) return; // can't disable yourself
+  if (!id || id === me.id) return { ok: false, error: "You can't change your own status." }; // can't disable yourself
   await prisma.user.update({ where: { id }, data: { active } });
   revalidatePath("/admin/users");
+  return { ok: true };
 }
 
-export async function deleteUser(form: FormData): Promise<void> {
-  const me = await requireAdmin();
+export async function deleteUser(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("userId") ?? "");
-  if (!id || id === me.id) return; // can't delete yourself
+  if (!id || id === me.id) return { ok: false, error: "You can't delete yourself." }; // can't delete yourself
   await prisma.user.delete({ where: { id } });
   revalidatePath("/admin/users");
+  return { ok: true };
 }
 
 // Designates the single recipient for admin-facing invoice notifications

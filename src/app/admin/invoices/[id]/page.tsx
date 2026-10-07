@@ -28,7 +28,7 @@ import {
   updateInvoiceNumber,
   deleteInvoice,
 } from "../actions";
-import ConfirmSubmitButton from "../../ConfirmSubmitButton";
+import PinConfirmButton from "../../PinConfirmButton";
 import CurrencyInput from "../../CurrencyInput";
 
 export const dynamic = "force-dynamic";
@@ -225,10 +225,14 @@ export default async function InvoiceDetailPage({
                   </td>
                   {isDraftEditable && (
                     <td className={td}>
-                      <form action={deleteLineItem}>
-                        <input type="hidden" name="lineItemId" value={li.id} />
-                        <button className="text-xs text-rose-300 hover:underline">Remove</button>
-                      </form>
+                      <PinConfirmButton
+                        action={deleteLineItem}
+                        fields={{ lineItemId: li.id }}
+                        confirmMessage="Remove this line item?"
+                        className="text-xs text-rose-300 hover:underline"
+                      >
+                        Remove
+                      </PinConfirmButton>
                     </td>
                   )}
                 </tr>
@@ -316,10 +320,14 @@ export default async function InvoiceDetailPage({
                     Download
                   </PinUnlockLink>
                   {isDraftEditable && (
-                    <form action={deleteInvoiceAttachment}>
-                      <input type="hidden" name="attachmentId" value={att.id} />
-                      <button className="text-xs text-rose-300 hover:underline">Remove</button>
-                    </form>
+                    <PinConfirmButton
+                      action={deleteInvoiceAttachment}
+                      fields={{ attachmentId: att.id }}
+                      confirmMessage="Remove this attachment?"
+                      className="text-xs text-rose-300 hover:underline"
+                    >
+                      Remove
+                    </PinConfirmButton>
                   )}
                 </span>
               </li>
@@ -419,15 +427,14 @@ export default async function InvoiceDetailPage({
           <h2 className="text-lg font-semibold text-white">Actions</h2>
           <div className="mt-3 flex flex-wrap gap-3">
             {isDraftEditable && invoice.lineItems.length > 0 && (
-              <form action={submitInvoice}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
-                >
-                  Submit for review
-                </button>
-              </form>
+              <PinConfirmButton
+                action={submitInvoice}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage="Submit this invoice for review?"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
+              >
+                Submit for review
+              </PinConfirmButton>
             )}
 
             {isDraftEditable && invoice.lineItems.length === 0 && (
@@ -437,94 +444,90 @@ export default async function InvoiceDetailPage({
             )}
 
             {(isAM || isAdmin) && invoice.status === "SUBMITTED" && (
-              <form action={approveInvoice}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
-                >
-                  Approve
-                </button>
-              </form>
+              <PinConfirmButton
+                action={approveInvoice}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage="Approve this invoice?"
+                className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+              >
+                Approve
+              </PinConfirmButton>
             )}
 
             {isAdmin && invoice.status === "AM_APPROVED" && (
-              <form action={approveInvoiceFinal}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
-                >
-                  Approve
-                </button>
-              </form>
+              <PinConfirmButton
+                action={approveInvoiceFinal}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage="Give final approval to this invoice?"
+                className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+              >
+                Approve
+              </PinConfirmButton>
             )}
 
             {isAdmin && (invoice.status === "AM_APPROVED" || invoice.status === "ADMIN_APPROVED") && (
-              <form action={sendInvoiceToClient}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
-                >
-                  Send
-                </button>
-              </form>
+              <PinConfirmButton
+                action={sendInvoiceToClient}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage={`Send this invoice to ${invoice.client.email}?`}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
+              >
+                Send
+              </PinConfirmButton>
             )}
 
             {isAdmin && invoice.status === "SENT" && (
-              <form action={markInvoicePaid}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <button
-                  type="submit"
-                  className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-teal-900/40 hover:bg-teal-500"
-                >
-                  Paid
-                </button>
-              </form>
+              <PinConfirmButton
+                action={markInvoicePaid}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage="Mark this invoice as paid?"
+                className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-teal-900/40 hover:bg-teal-500"
+              >
+                Paid
+              </PinConfirmButton>
             )}
 
             {((isAM && invoice.status === "SUBMITTED") ||
               (isAdmin && (invoice.status === "SUBMITTED" || invoice.status === "AM_APPROVED"))) && (
-              <form action={rejectInvoice} className="flex items-center gap-2">
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <input
-                  name="reason"
-                  placeholder="Rejection reason"
-                  required
-                  className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
-                />
-                <button
-                  type="submit"
-                  className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
-                >
-                  Reject
-                </button>
-              </form>
+              <PinConfirmButton
+                action={rejectInvoice}
+                fields={{ invoiceId: invoice.id }}
+                inputs={
+                  <input
+                    name="reason"
+                    placeholder="Rejection reason"
+                    required
+                    className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+                  />
+                }
+                confirmMessage="Reject this invoice and notify its creator?"
+                className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+              >
+                Reject
+              </PinConfirmButton>
             )}
 
             {isOwner && (
-              <form action={invoice.archived ? unarchiveInvoice : archiveInvoice}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <button
-                  type="submit"
-                  className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
-                >
-                  {invoice.archived ? "Unarchive" : "Archive"}
-                </button>
-              </form>
+              <PinConfirmButton
+                action={invoice.archived ? unarchiveInvoice : archiveInvoice}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage={invoice.archived ? "Unarchive this invoice?" : "Archive this invoice?"}
+                className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+              >
+                {invoice.archived ? "Unarchive" : "Archive"}
+              </PinConfirmButton>
             )}
 
             {me.role === "SUPER_ADMIN" && (
-              <form action={deleteInvoice}>
-                <input type="hidden" name="invoiceId" value={invoice.id} />
-                <ConfirmSubmitButton
-                  confirmMessage={`Permanently delete the invoice for ${invoice.site}? This can't be undone.`}
-                  className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
-                >
-                  Delete
-                </ConfirmSubmitButton>
-              </form>
+              <PinConfirmButton
+                action={deleteInvoice}
+                fields={{ invoiceId: invoice.id }}
+                confirmMessage={`Permanently delete the invoice for ${invoice.site}? This can't be undone.`}
+                successHref="/admin/invoices"
+                className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+              >
+                Delete
+              </PinConfirmButton>
             )}
           </div>
         </section>

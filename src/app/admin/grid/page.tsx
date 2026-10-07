@@ -26,6 +26,7 @@ import FlagCell from "./FlagCell";
 import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
 import PinUnlockLink from "../PinUnlockLink";
+import PinConfirmButton from "../PinConfirmButton";
 import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
@@ -316,21 +317,18 @@ export default async function GridPage({
                     {show("active") && (
                       <td className={`${td} whitespace-nowrap text-center`}>
                         {editable("active") ? (
-                          <form action={setActive}>
-                            <input type="hidden" name="employeeId" value={e.id} />
-                            <input type="hidden" name="active" value={(!e.active).toString()} />
-                            <button
-                              type="submit"
-                              className={
-                                e.active
-                                  ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-                                  : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
-                              }
-                              title="Click to toggle"
-                            >
-                              {e.active ? "Active" : "Inactive"}
-                            </button>
-                          </form>
+                          <PinConfirmButton
+                            action={setActive}
+                            fields={{ employeeId: e.id, active: (!e.active).toString() }}
+                            confirmMessage={e.active ? "Deactivate this employee?" : "Activate this employee?"}
+                            className={
+                              e.active
+                                ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                                : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
+                            }
+                          >
+                            {e.active ? "Active" : "Inactive"}
+                          </PinConfirmButton>
                         ) : (
                           <span
                             className={
@@ -596,21 +594,18 @@ export default async function GridPage({
                     {show("archived") && (
                       <td className={`${td} whitespace-nowrap text-center`}>
                         {editable("archived") ? (
-                          <form action={setArchived}>
-                            <input type="hidden" name="employeeId" value={e.id} />
-                            <input type="hidden" name="archived" value={(!e.archived).toString()} />
-                            <button
-                              type="submit"
-                              className={
-                                e.archived
-                                  ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
-                                  : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
-                              }
-                              title="Click to toggle"
-                            >
-                              {e.archived ? "Unarchive" : "Archive"}
-                            </button>
-                          </form>
+                          <PinConfirmButton
+                            action={setArchived}
+                            fields={{ employeeId: e.id, archived: (!e.archived).toString() }}
+                            confirmMessage={e.archived ? "Unarchive this employee?" : "Archive this employee?"}
+                            className={
+                              e.archived
+                                ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
+                                : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+                            }
+                          >
+                            {e.archived ? "Unarchive" : "Archive"}
+                          </PinConfirmButton>
                         ) : (
                           <span
                             className={

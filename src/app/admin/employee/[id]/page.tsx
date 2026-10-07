@@ -14,6 +14,7 @@ import {
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 import DocRow from "./DocRow";
 import PinUnlockLink from "../../PinUnlockLink";
+import PinConfirmButton from "../../PinConfirmButton";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
 import { submitStatusChange } from "./status-change/actions";
@@ -666,11 +667,14 @@ export default async function EmployeeLibraryPage({
                 {existingGrants.map((g) => (
                   <li key={g.id} className="flex items-center justify-between text-sm">
                     <span className="text-white">{g.user.name || g.user.email}</span>
-                    <form action={revokeDocumentAccess}>
-                      <input type="hidden" name="employeeId" value={id} />
-                      <input type="hidden" name="userId" value={g.userId} />
-                      <button className="text-xs text-rose-300 hover:underline">Revoke</button>
-                    </form>
+                    <PinConfirmButton
+                      action={revokeDocumentAccess}
+                      fields={{ employeeId: id, userId: g.userId }}
+                      confirmMessage={`Revoke document access for ${g.user.name || g.user.email}?`}
+                      className="text-xs text-rose-300 hover:underline"
+                    >
+                      Revoke
+                    </PinConfirmButton>
                   </li>
                 ))}
               </ul>

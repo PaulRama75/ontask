@@ -2,12 +2,23 @@
 
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requirePin } from "@/lib/auth";
 import { isAdminRole, getAccessMap, canView, getRestrictedSites, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
 import { saveInvoiceFile, getFile } from "@/lib/storage";
 import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { GatedResult } from "@/lib/gatedResult";
+
+// Shared PIN step for the gated actions below: reads the submitted `pin` from
+// the form, runs the uncached requirePin check, and maps its failure union to
+// the GatedResult channel (NO_PIN -> pinRequired so the dialog shows the
+// setup CTA). Returns null on success so the caller proceeds with the mutation.
+async function checkPin(form: FormData): Promise<{ ok: false; error: string; pinRequired?: boolean } | null> {
+  const pin = await requirePin(String(form.get("pin") ?? ""));
+  if (!pin.ok) return { ok: false, error: pin.error, pinRequired: pin.code === "NO_PIN" };
+  return null;
+}
 
 // Roles that create/edit invoices (Project Lead has the same invoice
 // capabilities as Project Manager, scoped to their own invoices).
@@ -24,20 +35,6 @@ async function requirePM() {
 async function requireAM() {
   const me = await getCurrentUser();
   if (!me || (me.role !== "ACCOUNT_MANAGER" && !isAdminRole(me.role))) throw new Error("Not authorized");
-  return me;
-}
-
-async function requireAdminUser() {
-  const me = await getCurrentUser();
-  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
-  return me;
-}
-
-// Permanently deleting an invoice is restricted to Super Admin -- a tier
-// above the regular Admin actions (approve/send/reject) in this file.
-async function requireSuperAdminUser() {
-  const me = await getCurrentUser();
-  if (!me || me.role !== "SUPER_ADMIN") throw new Error("Not authorized");
   return me;
 }
 
@@ -270,20 +267,24 @@ export async function importLineItemsFromExcel(form: FormData): Promise<void> {
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
-export async function deleteLineItem(form: FormData): Promise<void> {
-  const me = await requirePM();
+export async function deleteLineItem(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("lineItemId") ?? "");
   const lineItem = await prisma.invoiceLineItem.findUnique({
     where: { id },
     include: { invoice: true },
   });
-  if (!lineItem) return;
+  if (!lineItem) return { ok: true };
   if (lineItem.invoice.createdByUserId !== me.id && !isAdminRole(me.role))
-    throw new Error("Not authorized");
-  if (lineItem.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+    return { ok: false, error: "Not authorized" };
+  if (lineItem.invoice.status !== "DRAFT") return { ok: false, error: "Invoice is no longer editable." };
   await prisma.invoiceLineItem.delete({ where: { id } });
   await touchInvoice(lineItem.invoiceId, me);
   revalidatePath(`/admin/invoices/${lineItem.invoiceId}`);
+  return { ok: true };
 }
 
 // Lets an Account Manager or Admin correct a line item's amount after the PM
@@ -364,20 +365,24 @@ export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
-export async function deleteInvoiceAttachment(form: FormData): Promise<void> {
-  const me = await requirePM();
+export async function deleteInvoiceAttachment(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("attachmentId") ?? "");
   const att = await prisma.invoiceAttachment.findUnique({
     where: { id },
     include: { invoice: true },
   });
-  if (!att) return;
+  if (!att) return { ok: true };
   if (att.invoice.createdByUserId !== me.id && !isAdminRole(me.role))
-    throw new Error("Not authorized");
-  if (att.invoice.status !== "DRAFT") throw new Error("Invoice is no longer editable.");
+    return { ok: false, error: "Not authorized" };
+  if (att.invoice.status !== "DRAFT") return { ok: false, error: "Invoice is no longer editable." };
   await prisma.invoiceAttachment.delete({ where: { id } });
   await touchInvoice(att.invoiceId, me);
   revalidatePath(`/admin/invoices/${att.invoiceId}`);
+  return { ok: true };
 }
 
 const EXPORT_KEYS = COLUMN_KEYS.filter((k) => k !== "library");
@@ -510,14 +515,17 @@ export async function attachGridExport(form: FormData): Promise<void> {
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
 
-export async function submitInvoice(form: FormData): Promise<void> {
-  const me = await requirePM();
+export async function submitInvoice(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id }, include: { lineItems: true } });
-  if (!invoice) throw new Error("Invoice not found");
-  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) throw new Error("Not authorized");
-  if (invoice.status !== "DRAFT") throw new Error("Invoice already submitted.");
-  if (invoice.lineItems.length === 0) throw new Error("Add at least one line item before submitting.");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
+  if (invoice.createdByUserId !== me.id && !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  if (invoice.status !== "DRAFT") return { ok: false, error: "Invoice already submitted." };
+  if (invoice.lineItems.length === 0) return { ok: false, error: "Add at least one line item before submitting." };
 
   await prisma.invoice.update({
     where: { id },
@@ -535,14 +543,18 @@ export async function submitInvoice(form: FormData): Promise<void> {
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
-export async function approveInvoice(form: FormData): Promise<void> {
-  const me = await requireAM();
+export async function approveInvoice(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || (me.role !== "ACCOUNT_MANAGER" && !isAdminRole(me.role))) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
-  if (invoice.status !== "SUBMITTED") throw new Error("Invoice must be submitted before it can be approved.");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
+  if (invoice.status !== "SUBMITTED") return { ok: false, error: "Invoice must be submitted before it can be approved." };
 
   await prisma.invoice.update({
     where: { id },
@@ -565,24 +577,27 @@ export async function approveInvoice(form: FormData): Promise<void> {
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
-export async function rejectInvoice(form: FormData): Promise<void> {
+export async function rejectInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
-  if (!me) throw new Error("Not authenticated");
+  if (!me) return { ok: false, error: "Not authenticated" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const reason = String(form.get("reason") ?? "").trim();
-  if (!reason) throw new Error("A rejection reason is required.");
+  if (!reason) return { ok: false, error: "A rejection reason is required." };
 
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
 
   const isAM = me.role === "ACCOUNT_MANAGER";
   const admin = isAdminRole(me.role);
   const canRejectSubmitted = invoice.status === "SUBMITTED" && (isAM || admin);
   const canRejectAmApproved = invoice.status === "AM_APPROVED" && admin;
   if (!canRejectSubmitted && !canRejectAmApproved) {
-    throw new Error("Not authorized to reject this invoice at its current status.");
+    return { ok: false, error: "Not authorized to reject this invoice at its current status." };
   }
 
   await prisma.invoice.update({
@@ -607,17 +622,21 @@ export async function rejectInvoice(form: FormData): Promise<void> {
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
 // Admin's final approval, separate from actually sending the invoice.
 // Notifies Account Managers that it's approved and about to go out.
-export async function approveInvoiceFinal(form: FormData): Promise<void> {
-  const me = await requireAdminUser();
+export async function approveInvoiceFinal(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
   if (invoice.status !== "AM_APPROVED") {
-    throw new Error("Invoice must be Account-Manager approved before it can be approved.");
+    return { ok: false, error: "Invoice must be Account-Manager approved before it can be approved." };
   }
 
   await prisma.invoice.update({
@@ -636,21 +655,25 @@ export async function approveInvoiceFinal(form: FormData): Promise<void> {
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
 // Sends the approved invoice to the client. Available directly from
 // AM_APPROVED (skipping a separate approve step) or from ADMIN_APPROVED
 // after the admin already approved it -- either way it counts as approval.
-export async function sendInvoiceToClient(form: FormData): Promise<void> {
-  const me = await requireAdminUser();
+export async function sendInvoiceToClient(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({
     where: { id },
     include: { client: true, lineItems: true, attachments: true },
   });
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
   if (invoice.status !== "AM_APPROVED" && invoice.status !== "ADMIN_APPROVED") {
-    throw new Error("Invoice must be Account-Manager approved before it can be sent.");
+    return { ok: false, error: "Invoice must be Account-Manager approved before it can be sent." };
   }
 
   if (invoice.status === "AM_APPROVED") {
@@ -703,17 +726,21 @@ ${rows}
   revalidatePath("/admin/invoices");
 
   if (!sent) {
-    throw new Error("Email to the client failed to send. Click Send again to retry.");
+    return { ok: false, error: "Email to the client failed to send. Click Send again to retry." };
   }
+  return { ok: true };
 }
 
 // Final lifecycle step, marking that payment has actually come in.
-export async function markInvoicePaid(form: FormData): Promise<void> {
-  const me = await requireAdminUser();
+export async function markInvoicePaid(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
-  if (invoice.status !== "SENT") throw new Error("Invoice must be sent before it can be marked paid.");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
+  if (invoice.status !== "SENT") return { ok: false, error: "Invoice must be sent before it can be marked paid." };
 
   await prisma.invoice.update({
     where: { id },
@@ -727,15 +754,18 @@ export async function markInvoicePaid(form: FormData): Promise<void> {
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
-export async function archiveInvoice(form: FormData): Promise<void> {
+export async function archiveInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
-  if (!me) throw new Error("Not authenticated");
+  if (!me) return { ok: false, error: "Not authenticated" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
-  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
+  if (!isInvoiceOwner(me, invoice)) return { ok: false, error: "Not authorized" };
 
   await prisma.invoice.update({
     where: { id },
@@ -743,15 +773,18 @@ export async function archiveInvoice(form: FormData): Promise<void> {
   });
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
-export async function unarchiveInvoice(form: FormData): Promise<void> {
+export async function unarchiveInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
-  if (!me) throw new Error("Not authenticated");
+  if (!me) return { ok: false, error: "Not authenticated" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
-  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
+  if (!isInvoiceOwner(me, invoice)) return { ok: false, error: "Not authorized" };
 
   await prisma.invoice.update({
     where: { id },
@@ -759,19 +792,24 @@ export async function unarchiveInvoice(form: FormData): Promise<void> {
   });
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
+  return { ok: true };
 }
 
 // Permanently deletes an invoice and its line items/attachments/comments
 // (cascade). Only Super Admin can do this -- everyone else can Archive.
-export async function deleteInvoice(form: FormData): Promise<void> {
-  await requireSuperAdminUser();
+export async function deleteInvoice(form: FormData): Promise<GatedResult> {
+  const me = await getCurrentUser();
+  if (!me || me.role !== "SUPER_ADMIN") return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(form);
+  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) return { ok: false, error: "Invoice not found" };
 
   await prisma.invoice.delete({ where: { id } });
   revalidatePath("/admin/invoices");
-  redirect("/admin/invoices");
+  // RULE 1: no server-side redirect() -- the client navigates to the list on ok.
+  return { ok: true };
 }
 
 export async function addInvoiceComment(form: FormData): Promise<void> {

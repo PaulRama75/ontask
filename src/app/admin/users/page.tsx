@@ -15,7 +15,7 @@ import {
   deleteUser,
 } from "./actions";
 import NewUserForm from "./NewUserForm";
-import ConfirmSubmitButton from "../ConfirmSubmitButton";
+import PinConfirmButton from "../PinConfirmButton";
 
 export const dynamic = "force-dynamic";
 
@@ -88,13 +88,12 @@ export default async function UsersPage() {
                 <td className="px-4 py-3 font-medium text-white">{u.name || "—"}</td>
                 <td className="px-4 py-3 text-slate-400">{u.email}</td>
                 <td className="px-4 py-3">
-                  <form action={setUserRole} className="flex items-center gap-2">
-                    <input type="hidden" name="userId" value={u.id} />
+                  {u.id === me.id ? (
                     <select
                       key={u.role}
                       name="role"
                       defaultValue={u.role}
-                      disabled={u.id === me.id}
+                      disabled
                       className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400 disabled:bg-slate-900/40 disabled:text-slate-500"
                     >
                       {ROLES.map((r) => (
@@ -103,30 +102,47 @@ export default async function UsersPage() {
                         </option>
                       ))}
                     </select>
-                    {u.id !== me.id && (
-                      <button className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5">
-                        Save
-                      </button>
-                    )}
-                  </form>
+                  ) : (
+                    <PinConfirmButton
+                      action={setUserRole}
+                      fields={{ userId: u.id }}
+                      inputs={
+                        <select
+                          key={u.role}
+                          name="role"
+                          defaultValue={u.role}
+                          className="rounded-md border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_LABELS[r as Role]}
+                            </option>
+                          ))}
+                        </select>
+                      }
+                      confirmMessage={`Change the role for ${u.name || u.email}?`}
+                      className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5"
+                    >
+                      Save
+                    </PinConfirmButton>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {u.id === me.id ? (
                     <span className="text-xs text-slate-500">you</span>
                   ) : (
-                    <form action={setUserActive}>
-                      <input type="hidden" name="userId" value={u.id} />
-                      <input type="hidden" name="active" value={(!u.active).toString()} />
-                      <button
-                        className={
-                          u.active
-                            ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-                            : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
-                        }
-                      >
-                        {u.active ? "Active" : "Disabled"}
-                      </button>
-                    </form>
+                    <PinConfirmButton
+                      action={setUserActive}
+                      fields={{ userId: u.id, active: (!u.active).toString() }}
+                      confirmMessage={u.active ? `Disable ${u.name || u.email}?` : `Enable ${u.name || u.email}?`}
+                      className={
+                        u.active
+                          ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                          : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
+                      }
+                    >
+                      {u.active ? "Active" : "Disabled"}
+                    </PinConfirmButton>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -192,15 +208,14 @@ export default async function UsersPage() {
                 {isAdminRole(me.role) && (
                   <td className="px-4 py-3">
                     {u.id !== me.id && (
-                      <form action={deleteUser}>
-                        <input type="hidden" name="userId" value={u.id} />
-                        <ConfirmSubmitButton
-                          confirmMessage={`Delete ${u.name || u.email}? This can't be undone.`}
-                          className="text-xs text-rose-300 hover:underline"
-                        >
-                          Delete
-                        </ConfirmSubmitButton>
-                      </form>
+                      <PinConfirmButton
+                        action={deleteUser}
+                        fields={{ userId: u.id }}
+                        confirmMessage={`Delete ${u.name || u.email}? This can't be undone.`}
+                        className="text-xs text-rose-300 hover:underline"
+                      >
+                        Delete
+                      </PinConfirmButton>
                     )}
                   </td>
                 )}

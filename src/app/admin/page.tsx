@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getNavAccess, firstAllowedNavHref, isAdminRole } from "@/lib/rbac";
 import { findDuplicateEmployeeIds } from "@/lib/duplicates";
 import { createOnboardingLink, deleteEmployee } from "./actions";
-import ConfirmSubmitButton from "./ConfirmSubmitButton";
+import PinConfirmButton from "./PinConfirmButton";
 import AssignContactCell from "./AssignContactCell";
 import ImportEmployees from "./ImportEmployees";
 
@@ -192,15 +192,14 @@ export default async function AdminPage() {
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
-                        <form action={deleteEmployee}>
-                          <input type="hidden" name="employeeId" value={e.id} />
-                          <ConfirmSubmitButton
-                            confirmMessage={`Delete ${employeeName}? This removes their onboarding record, documents, and certifications. This can't be undone.`}
-                            className="text-xs text-rose-300 hover:underline"
-                          >
-                            Delete
-                          </ConfirmSubmitButton>
-                        </form>
+                        <PinConfirmButton
+                          action={deleteEmployee}
+                          fields={{ employeeId: e.id }}
+                          confirmMessage={`Delete ${employeeName}? This removes their onboarding record, documents, and certifications. This can't be undone.`}
+                          className="text-xs text-rose-300 hover:underline"
+                        >
+                          Delete
+                        </PinConfirmButton>
                       </td>
                     )}
                   </tr>
