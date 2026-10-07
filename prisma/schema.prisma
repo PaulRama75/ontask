@@ -24,7 +24,7 @@ model Employee {
   email     String?
   phone     String?
 
-  // Sensitive — stored encrypted-at-rest target later; plain for Phase 1 dev
+  // Sensitive — stored AES-256-GCM ciphertext with "enc:v1:" prefix (see src/lib/crypto.ts); legacy plaintext tolerated during migration.
   ssn String? // Social Security Number
 
   // Address
@@ -143,6 +143,10 @@ model User {
   name         String?
   role         String               @default("EMPLOYEE")
   passwordHash String
+  // Numeric security PIN (scrypt hash, same "{salt}:{dk}" format as
+  // passwordHash). Null = no PIN set yet; the user is forced to set one
+  // before any PIN-gated action or protected file download.
+  pinHash      String?
   active       Boolean              @default(true)
   createdAt    DateTime             @default(now())
   sessions     Session[]
@@ -217,6 +221,21 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+}
+
+// A single-use, short-lived unlock token minted after a verified security PIN.
+// The raw token lives only in an HttpOnly cookie; tokenHash is its sha256.
+// scope namespaces what the unlock authorizes ("file" | "export" | "ssn").
+model PinUnlockToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  scope     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // Per-column access for a role. level: HIDDEN | VIEW | EDIT.
