@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
 import { STATUS_LABEL, STATUS_STYLE } from "./statusLabels";
 import InvoiceControls from "./InvoiceControls";
+import { updateClientName, updateInvoiceSite } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -207,11 +208,45 @@ export default async function InvoicesPage({
                 return (
                   <tr key={inv.id}>
                     <td className={td}>
-                      <Link href={`/admin/invoices/${inv.id}`} className="text-cyan-400 hover:underline">
-                        {inv.site}
-                      </Link>
+                      {isAdminRole(me.role) || inv.createdByUserId === me.id ? (
+                        <div className="flex items-center gap-2">
+                          <form action={updateInvoiceSite} className="flex items-center gap-1">
+                            <input type="hidden" name="invoiceId" value={inv.id} />
+                            <input
+                              name="site"
+                              defaultValue={inv.site}
+                              aria-label="Site for this invoice"
+                              className="w-32 rounded border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
+                            />
+                            <button className="text-xs text-cyan-400 hover:underline">Save</button>
+                          </form>
+                          <Link href={`/admin/invoices/${inv.id}`} className="text-xs text-slate-400 hover:text-cyan-400 hover:underline">
+                            Open →
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link href={`/admin/invoices/${inv.id}`} className="text-cyan-400 hover:underline">
+                          {inv.site}
+                        </Link>
+                      )}
                     </td>
-                    <td className={td}>{inv.clientName ?? inv.client.name}</td>
+                    <td className={td}>
+                      {/* Same rule as the invoice page: its creator or an Admin may rename it. */}
+                      {isAdminRole(me.role) || inv.createdByUserId === me.id ? (
+                        <form action={updateClientName} className="flex items-center gap-1">
+                          <input type="hidden" name="invoiceId" value={inv.id} />
+                          <input
+                            name="clientName"
+                            defaultValue={inv.clientName ?? inv.client.name}
+                            aria-label={`Client name for ${inv.site} invoice`}
+                            className="w-40 rounded border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
+                          />
+                          <button className="text-xs text-cyan-400 hover:underline">Save</button>
+                        </form>
+                      ) : (
+                        (inv.clientName ?? inv.client.name)
+                      )}
+                    </td>
                     <td className={td}>{inv.invoiceNumber || "—"}</td>
                     <td className={td}>{inv.jobNumber || "—"}</td>
                     <td className={td}>${total.toFixed(2)}</td>

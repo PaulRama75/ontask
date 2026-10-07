@@ -24,6 +24,7 @@ import {
   replyToRejection,
   addInvoiceComment,
   updateClientName,
+  updateInvoiceSite,
   updateInvoiceNumber,
   deleteInvoice,
 } from "../actions";
@@ -128,7 +129,21 @@ export default async function InvoiceDetailPage({
             </thead>
             <tbody>
               <tr>
-                <td className="px-4 py-2 text-slate-200">{invoice.site}</td>
+                <td className="px-4 py-2 text-slate-200">
+                  {isOwner ? (
+                    <form action={updateInvoiceSite} className="flex items-center gap-1">
+                      <input type="hidden" name="invoiceId" value={invoice.id} />
+                      <input
+                        name="site"
+                        defaultValue={invoice.site}
+                        className="w-32 rounded border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white focus:border-cyan-400 focus:ring-cyan-400"
+                      />
+                      <button className="text-xs text-cyan-400 hover:underline">Save</button>
+                    </form>
+                  ) : (
+                    invoice.site
+                  )}
+                </td>
                 <td className="px-4 py-2 text-slate-200">
                   {isOwner ? (
                     <form action={updateClientName} className="flex items-center gap-1">

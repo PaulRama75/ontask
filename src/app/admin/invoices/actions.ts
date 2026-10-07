@@ -148,6 +148,23 @@ export async function createInvoice(
   redirect(`/admin/invoices/${invoice.id}`);
 }
 
+// Changes the site on THIS invoice only.
+export async function updateInvoiceSite(form: FormData): Promise<void> {
+  const me = await requirePM();
+  const invoiceId = String(form.get("invoiceId") ?? "");
+  const site = String(form.get("site") ?? "").trim();
+  if (!site) throw new Error("Site is required.");
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!isInvoiceOwner(me, invoice)) throw new Error("Not authorized");
+
+  await prisma.invoice.update({ where: { id: invoiceId }, data: { site } });
+  await touchInvoice(invoiceId, me);
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath("/admin/invoices");
+}
+
 // Changes the client name shown on THIS invoice only.
 export async function updateClientName(form: FormData): Promise<void> {
   const me = await requirePM();
