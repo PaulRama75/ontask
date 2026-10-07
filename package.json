@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "prisma migrate deploy && next start"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1121.0",
