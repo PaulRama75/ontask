@@ -80,6 +80,12 @@ export default async function InvoicesPage({
   const withTotals = all.map((inv) => ({
     ...inv,
     total: inv.lineItems.reduce((sum, li) => sum + li.amount, 0),
+    // The invoice's own line-item descriptions, oldest first, for the list view.
+    description: [...inv.lineItems]
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((li) => li.description.trim())
+      .filter(Boolean)
+      .join("; "),
   }));
 
   const needle = q.trim().toLowerCase();
@@ -87,7 +93,7 @@ export default async function InvoicesPage({
     if (inv.archived !== showArchived) return false;
     if (status !== "all" && inv.status !== status) return false;
     if (needle) {
-      const haystack = `${inv.site} ${inv.clientName ?? inv.client.name}`.toLowerCase();
+      const haystack = `${inv.site} ${inv.clientName ?? inv.client.name} ${inv.description}`.toLowerCase();
       if (!haystack.includes(needle)) return false;
     }
     return true;
@@ -186,11 +192,11 @@ export default async function InvoicesPage({
               <tr>
                 <SortHeader sortKey="site" label="Site" />
                 <SortHeader sortKey="client" label="Client" />
+                <th className={th}>Description</th>
                 <SortHeader sortKey="invoiceNumber" label="Invoice#" />
                 <SortHeader sortKey="jobNumber" label="Job No#" />
                 <SortHeader sortKey="total" label="Total" />
                 <SortHeader sortKey="status" label="Status" />
-                <SortHeader sortKey="createdAt" label="Created" />
                 <th className={th}>Modified by</th>
                 <SortHeader sortKey="updatedAt" label="Modified" />
               </tr>
@@ -198,7 +204,7 @@ export default async function InvoicesPage({
             <tbody>
               {invoices.length === 0 && (
                 <tr>
-                  <td className={`${td} text-center text-slate-500`} colSpan={8}>
+                  <td className={`${td} text-center text-slate-500`} colSpan={9}>
                     {all.length === 0 ? "No invoices yet." : "No invoices match your search/filter."}
                   </td>
                 </tr>
@@ -208,9 +214,13 @@ export default async function InvoicesPage({
                 return (
                   <tr key={inv.id}>
                     <td className={td}>
-                      {isAdminRole(me.role) || inv.createdByUserId === me.id ? (
-                        <div className="flex items-center gap-2">
-                          <form action={updateInvoiceSite} className="flex items-center gap-1">
+                      <Link href={`/admin/invoices/${inv.id}`} className="text-cyan-400 hover:underline">
+                        {inv.site}
+                      </Link>
+                      {(isAdminRole(me.role) || inv.createdByUserId === me.id) && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-xs text-slate-500 hover:text-cyan-400">Edit site</summary>
+                          <form action={updateInvoiceSite} className="mt-1 flex items-center gap-1">
                             <input type="hidden" name="invoiceId" value={inv.id} />
                             <input
                               name="site"
@@ -220,14 +230,7 @@ export default async function InvoicesPage({
                             />
                             <button className="text-xs text-cyan-400 hover:underline">Save</button>
                           </form>
-                          <Link href={`/admin/invoices/${inv.id}`} className="text-xs text-slate-400 hover:text-cyan-400 hover:underline">
-                            Open →
-                          </Link>
-                        </div>
-                      ) : (
-                        <Link href={`/admin/invoices/${inv.id}`} className="text-cyan-400 hover:underline">
-                          {inv.site}
-                        </Link>
+                        </details>
                       )}
                     </td>
                     <td className={td}>
@@ -247,6 +250,11 @@ export default async function InvoicesPage({
                         (inv.clientName ?? inv.client.name)
                       )}
                     </td>
+                    <td className={`${td} min-w-56 max-w-xs`}>
+                      <span className="line-clamp-2 text-slate-300" title={inv.description}>
+                        {inv.description || "—"}
+                      </span>
+                    </td>
                     <td className={td}>{inv.invoiceNumber || "—"}</td>
                     <td className={td}>{inv.jobNumber || "—"}</td>
                     <td className={td}>${total.toFixed(2)}</td>
@@ -260,7 +268,6 @@ export default async function InvoicesPage({
                         </span>
                       )}
                     </td>
-                    <td className={`${td} whitespace-nowrap`}>{formatDateTime(inv.createdAt)}</td>
                     <td className={td}>{inv.lastModifiedByName || "—"}</td>
                     <td className={`${td} whitespace-nowrap`}>{formatDateTime(inv.updatedAt)}</td>
                   </tr>
