@@ -13,6 +13,7 @@ import {
 } from "@/lib/rbac";
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 import DocRow from "./DocRow";
+import PinUnlockLink from "../../PinUnlockLink";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
 import { submitStatusChange } from "./status-change/actions";
@@ -572,12 +573,13 @@ export default async function EmployeeLibraryPage({
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Documents</h2>
             {e.documents.length > 0 && (
-              <a
+              <PinUnlockLink
                 href={`/api/documents-export/${e.id}`}
+                scope="export"
                 className="text-sm text-cyan-400 hover:underline"
               >
                 Download all
-              </a>
+              </PinUnlockLink>
             )}
           </div>
           <div className="mt-3 space-y-4">

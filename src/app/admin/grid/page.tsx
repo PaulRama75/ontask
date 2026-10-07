@@ -25,6 +25,7 @@ import UploadCell from "./UploadCell";
 import FlagCell from "./FlagCell";
 import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
+import PinUnlockLink from "../PinUnlockLink";
 import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
@@ -201,12 +202,13 @@ export default async function GridPage({
           </div>
           <div className="flex items-center gap-4">
             {canLibrary && (
-              <a
+              <PinUnlockLink
                 href="/api/documents-export"
+                scope="export"
                 className="text-sm text-cyan-400 hover:underline"
               >
                 Download all documents
-              </a>
+              </PinUnlockLink>
             )}
             <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
               ← Admin home
@@ -291,13 +293,14 @@ export default async function GridPage({
                           </span>
                         )}
                         {canLibrary && e.documents.length > 0 && (
-                          <a
+                          <PinUnlockLink
                             href={`/api/documents-export/${e.id}`}
+                            scope="export"
                             title={`Download ${name}'s documents`}
                             className="ml-1 text-xs font-normal text-slate-500 hover:text-cyan-400"
                           >
                             ⬇
-                          </a>
+                          </PinUnlockLink>
                         )}
                       </td>
                     )}

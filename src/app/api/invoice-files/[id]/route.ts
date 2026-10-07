@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getFile } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole } from "@/lib/rbac";
+import { consumeUnlock } from "@/lib/pinGate";
 
 // Serves an invoice attachment. Unlike /api/files/[id] (employee documents,
 // currently unauthenticated), this route checks the caller's role/ownership
@@ -21,6 +22,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const allowed =
     isAdminRole(me.role) || me.role === "ACCOUNT_MANAGER" || att.invoice.createdByUserId === me.id;
   if (!allowed) return new Response("Forbidden", { status: 403 });
+
+  // Additive PIN gate — consumes a single-use unlock minted by the client
+  // after a verified PIN (verifyPinForUnlock). Runs AFTER all existing auth.
+  if (!(await consumeUnlock("file"))) {
+    return new Response("PIN required", { status: 401, headers: { "x-pin-required": "1" } });
+  }
 
   const file = await getFile(att.storageKey);
   if (!file) return new Response("File missing", { status: 404 });

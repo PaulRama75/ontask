@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
 import AttachmentUploadForm from "../AttachmentUploadForm";
 import DownloadAllButton from "../DownloadAllButton";
+import PinUnlockLink from "../../PinUnlockLink";
 import {
   addLineItem,
   importLineItemsFromExcel,
@@ -299,20 +300,21 @@ export default async function InvoiceDetailPage({
             {invoice.attachments.length === 0 && <li className="text-slate-500">No attachments yet.</li>}
             {invoice.attachments.map((att) => (
               <li key={att.id} className="flex items-center justify-between gap-3">
-                <a
+                <PinUnlockLink
                   href={`/api/invoice-files/${att.id}`}
-                  target="_blank"
+                  scope="file"
                   className="text-cyan-400 hover:underline"
                 >
                   {att.fileName} <span className="text-xs text-slate-500">({att.category})</span>
-                </a>
+                </PinUnlockLink>
                 <span className="flex items-center gap-3">
-                  <a
+                  <PinUnlockLink
                     href={`/api/invoice-files/${att.id}?dl=1`}
+                    scope="file"
                     className="text-xs font-medium text-cyan-400 hover:underline"
                   >
                     Download
-                  </a>
+                  </PinUnlockLink>
                   {isDraftEditable && (
                     <form action={deleteInvoiceAttachment}>
                       <input type="hidden" name="attachmentId" value={att.id} />

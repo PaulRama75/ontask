@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { deleteEmployeeDocument, renameEmployeeDocument } from "../actions";
 import ConfirmSubmitButton from "../ConfirmSubmitButton";
+import PinUnlockLink from "../PinUnlockLink";
 
 type DocLite = { id: string; fileName: string; category: string; label: string | null };
 
@@ -79,14 +80,14 @@ function DocRow({
 
   return (
     <div className="flex items-center gap-1.5">
-      <a
+      <PinUnlockLink
         href={`/api/files/${doc.id}`}
-        target="_blank"
+        scope="file"
         className="text-cyan-400 hover:underline"
         title={doc.fileName}
       >
         {displayName}
-      </a>
+      </PinUnlockLink>
       {canManage && (
         <>
           <button
