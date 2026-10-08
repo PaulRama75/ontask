@@ -4,8 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
 import AttachmentUploadForm from "../AttachmentUploadForm";
-import DownloadAllButton from "../DownloadAllButton";
-import PinUnlockLink from "../../PinUnlockLink";
 import {
   addLineItem,
   importLineItemsFromExcel,
@@ -29,7 +27,6 @@ import {
   updateInvoiceNumber,
   deleteInvoice,
 } from "../actions";
-import PinConfirmButton from "../../PinConfirmButton";
 import CurrencyInput from "../../CurrencyInput";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +41,59 @@ export default async function InvoiceDetailPage({
   const nav = await getNavAccess(me.role);
   if (!nav.invoices) redirect(firstAllowedNavHref(nav));
   const { id } = await params;
+
+  // The invoice server actions still return GatedResult (kept so the rest of
+  // the codebase's call sites are untouched), but a plain <form action> wants
+  // a void-returning action. These thin wrappers run the action and discard
+  // its result; the action's own revalidatePath/redirect drives the UI.
+  async function runLineItemAction(form: FormData): Promise<void> {
+    "use server";
+    await deleteLineItem(form);
+  }
+  async function runDeleteAttachment(form: FormData): Promise<void> {
+    "use server";
+    await deleteInvoiceAttachment(form);
+  }
+  async function runAttachGridExport(form: FormData): Promise<void> {
+    "use server";
+    await attachGridExport(form);
+  }
+  async function runSubmitInvoice(form: FormData): Promise<void> {
+    "use server";
+    await submitInvoice(form);
+  }
+  async function runApproveInvoice(form: FormData): Promise<void> {
+    "use server";
+    await approveInvoice(form);
+  }
+  async function runApproveInvoiceFinal(form: FormData): Promise<void> {
+    "use server";
+    await approveInvoiceFinal(form);
+  }
+  async function runSendInvoiceToClient(form: FormData): Promise<void> {
+    "use server";
+    await sendInvoiceToClient(form);
+  }
+  async function runMarkInvoicePaid(form: FormData): Promise<void> {
+    "use server";
+    await markInvoicePaid(form);
+  }
+  async function runRejectInvoice(form: FormData): Promise<void> {
+    "use server";
+    await rejectInvoice(form);
+  }
+  async function runArchiveInvoice(form: FormData): Promise<void> {
+    "use server";
+    await archiveInvoice(form);
+  }
+  async function runUnarchiveInvoice(form: FormData): Promise<void> {
+    "use server";
+    await unarchiveInvoice(form);
+  }
+  async function runDeleteInvoice(form: FormData): Promise<void> {
+    "use server";
+    await deleteInvoice(form);
+  }
 
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -240,14 +290,12 @@ export default async function InvoiceDetailPage({
                   </td>
                   {isDraftEditable && (
                     <td className={td}>
-                      <PinConfirmButton
-                        action={deleteLineItem}
-                        fields={{ lineItemId: li.id }}
-                        confirmMessage="Remove this line item?"
-                        className="text-xs text-rose-300 hover:underline"
-                      >
-                        Remove
-                      </PinConfirmButton>
+                      <form action={runLineItemAction}>
+                        <input type="hidden" name="lineItemId" value={li.id} />
+                        <button type="submit" className="text-xs text-rose-300 hover:underline">
+                          Remove
+                        </button>
+                      </form>
                     </td>
                   )}
                 </tr>
@@ -312,37 +360,35 @@ export default async function InvoiceDetailPage({
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Attachments</h2>
             {invoice.attachments.length > 1 && (
-              <DownloadAllButton attachmentIds={invoice.attachments.map((a) => a.id)} />
+              <span className="text-xs text-slate-500">
+                Use each file&apos;s Download link below.
+              </span>
             )}
           </div>
           <ul className="mt-3 space-y-1 text-sm">
             {invoice.attachments.length === 0 && <li className="text-slate-500">No attachments yet.</li>}
             {invoice.attachments.map((att) => (
               <li key={att.id} className="flex items-center justify-between gap-3">
-                <PinUnlockLink
+                <a
                   href={`/api/invoice-files/${att.id}`}
-                  scope="file"
                   className="text-cyan-400 hover:underline"
                 >
                   {att.fileName} <span className="text-xs text-slate-500">({att.category})</span>
-                </PinUnlockLink>
+                </a>
                 <span className="flex items-center gap-3">
-                  <PinUnlockLink
+                  <a
                     href={`/api/invoice-files/${att.id}?dl=1`}
-                    scope="file"
                     className="text-xs font-medium text-cyan-400 hover:underline"
                   >
                     Download
-                  </PinUnlockLink>
+                  </a>
                   {isDraftEditable && (
-                    <PinConfirmButton
-                      action={deleteInvoiceAttachment}
-                      fields={{ attachmentId: att.id }}
-                      confirmMessage="Remove this attachment?"
-                      className="text-xs text-rose-300 hover:underline"
-                    >
-                      Remove
-                    </PinConfirmButton>
+                    <form action={runDeleteAttachment}>
+                      <input type="hidden" name="attachmentId" value={att.id} />
+                      <button type="submit" className="text-xs text-rose-300 hover:underline">
+                        Remove
+                      </button>
+                    </form>
                   )}
                 </span>
               </li>
@@ -356,30 +402,29 @@ export default async function InvoiceDetailPage({
           {isDraftEditable && siteEmployees.length > 0 && (
             <div className="mt-6 border-t border-white/10 pt-4">
               <p className="text-sm font-medium text-slate-300">Attach a grid snapshot for {invoice.site}</p>
-              <PinConfirmButton
-                action={attachGridExport}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage={`Attach a grid snapshot for ${invoice.site} to this invoice. SSNs are stored masked (last 4 only).`}
-                className="mt-2 rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
-                inputs={
-                  <div className="max-h-40 w-full space-y-1 overflow-y-auto rounded-md border border-white/10 p-2">
-                    {siteEmployees.map((e) => (
-                      <label key={e.id} className="flex items-center gap-2 text-sm text-slate-200">
-                        <input
-                          type="checkbox"
-                          name="employeeIds"
-                          value={e.id}
-                          defaultChecked
-                          className="border-white/10 bg-slate-800"
-                        />
-                        {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
-                      </label>
-                    ))}
-                  </div>
-                }
-              >
-                Attach grid snapshot
-              </PinConfirmButton>
+              <form action={runAttachGridExport}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <div className="max-h-40 w-full space-y-1 overflow-y-auto rounded-md border border-white/10 p-2">
+                  {siteEmployees.map((e) => (
+                    <label key={e.id} className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        name="employeeIds"
+                        value={e.id}
+                        defaultChecked
+                        className="border-white/10 bg-slate-800"
+                      />
+                      {[e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)"}
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="submit"
+                  className="mt-2 rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+                >
+                  Attach grid snapshot
+                </button>
+              </form>
             </div>
           )}
         </section>
@@ -445,14 +490,15 @@ export default async function InvoiceDetailPage({
           <h2 className="text-lg font-semibold text-white">Actions</h2>
           <div className="mt-3 flex flex-wrap gap-3">
             {isDraftEditable && invoice.lineItems.length > 0 && (
-              <PinConfirmButton
-                action={submitInvoice}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage="Submit this invoice for review?"
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
-              >
-                Submit for review
-              </PinConfirmButton>
+              <form action={runSubmitInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
+                >
+                  Submit for review
+                </button>
+              </form>
             )}
 
             {isDraftEditable && invoice.lineItems.length === 0 && (
@@ -462,90 +508,94 @@ export default async function InvoiceDetailPage({
             )}
 
             {(isAM || isAdmin) && invoice.status === "SUBMITTED" && (
-              <PinConfirmButton
-                action={approveInvoice}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage="Approve this invoice?"
-                className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
-              >
-                Approve
-              </PinConfirmButton>
+              <form action={runApproveInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+                >
+                  Approve
+                </button>
+              </form>
             )}
 
             {isAdmin && invoice.status === "AM_APPROVED" && (
-              <PinConfirmButton
-                action={approveInvoiceFinal}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage="Give final approval to this invoice?"
-                className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
-              >
-                Approve
-              </PinConfirmButton>
+              <form action={runApproveInvoiceFinal}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400"
+                >
+                  Approve
+                </button>
+              </form>
             )}
 
             {isAdmin && (invoice.status === "AM_APPROVED" || invoice.status === "ADMIN_APPROVED") && (
-              <PinConfirmButton
-                action={sendInvoiceToClient}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage={`Send this invoice to ${invoice.client.email}?`}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
-              >
-                Send
-              </PinConfirmButton>
+              <form action={runSendInvoiceToClient}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500"
+                >
+                  Send
+                </button>
+              </form>
             )}
 
             {isAdmin && invoice.status === "SENT" && (
-              <PinConfirmButton
-                action={markInvoicePaid}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage="Mark this invoice as paid?"
-                className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-teal-900/40 hover:bg-teal-500"
-              >
-                Paid
-              </PinConfirmButton>
+              <form action={runMarkInvoicePaid}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-teal-900/40 hover:bg-teal-500"
+                >
+                  Paid
+                </button>
+              </form>
             )}
 
             {((isAM && invoice.status === "SUBMITTED") ||
               (isAdmin && (invoice.status === "SUBMITTED" || invoice.status === "AM_APPROVED"))) && (
-              <PinConfirmButton
-                action={rejectInvoice}
-                fields={{ invoiceId: invoice.id }}
-                inputs={
-                  <input
-                    name="reason"
-                    placeholder="Rejection reason"
-                    required
-                    className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
-                  />
-                }
-                confirmMessage="Reject this invoice and notify its creator?"
-                className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
-              >
-                Reject
-              </PinConfirmButton>
+              <form action={runRejectInvoice} className="flex items-center gap-2">
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <input
+                  name="reason"
+                  placeholder="Rejection reason"
+                  required
+                  className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+                >
+                  Reject
+                </button>
+              </form>
             )}
 
             {isOwner && (
-              <PinConfirmButton
-                action={invoice.archived ? unarchiveInvoice : archiveInvoice}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage={invoice.archived ? "Unarchive this invoice?" : "Archive this invoice?"}
-                className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
-              >
-                {invoice.archived ? "Unarchive" : "Archive"}
-              </PinConfirmButton>
+              <form action={invoice.archived ? runUnarchiveInvoice : runArchiveInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+                >
+                  {invoice.archived ? "Unarchive" : "Archive"}
+                </button>
+              </form>
             )}
 
             {me.role === "SUPER_ADMIN" && (
-              <PinConfirmButton
-                action={deleteInvoice}
-                fields={{ invoiceId: invoice.id }}
-                confirmMessage={`Permanently delete the invoice for ${invoice.site}? This can't be undone.`}
-                successHref="/admin/invoices"
-                className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
-              >
-                Delete
-              </PinConfirmButton>
+              <form action={runDeleteInvoice}>
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+                >
+                  Delete
+                </button>
+              </form>
             )}
           </div>
         </section>

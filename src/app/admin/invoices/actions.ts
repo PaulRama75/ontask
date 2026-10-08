@@ -2,7 +2,7 @@
 
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, requirePin } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getAccessMap, canView, getRestrictedSites, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
 import { saveInvoiceFile, getFile } from "@/lib/storage";
 import { maskSsn, safeDecrypt } from "@/lib/crypto";
@@ -10,16 +10,6 @@ import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { GatedResult } from "@/lib/gatedResult";
-
-// Shared PIN step for the gated actions below: reads the submitted `pin` from
-// the form, runs the uncached requirePin check, and maps its failure union to
-// the GatedResult channel (NO_PIN -> pinRequired so the dialog shows the
-// setup CTA). Returns null on success so the caller proceeds with the mutation.
-async function checkPin(form: FormData): Promise<{ ok: false; error: string; pinRequired?: boolean } | null> {
-  const pin = await requirePin(String(form.get("pin") ?? ""));
-  if (!pin.ok) return { ok: false, error: pin.error, pinRequired: pin.code === "NO_PIN" };
-  return null;
-}
 
 // Roles that create/edit invoices (Project Lead has the same invoice
 // capabilities as Project Manager, scoped to their own invoices).
@@ -289,8 +279,6 @@ export async function importLineItemsFromExcel(form: FormData): Promise<void> {
 export async function deleteLineItem(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("lineItemId") ?? "");
   const lineItem = await prisma.invoiceLineItem.findUnique({
     where: { id },
@@ -387,8 +375,6 @@ export async function uploadInvoiceAttachment(form: FormData): Promise<void> {
 export async function deleteInvoiceAttachment(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("attachmentId") ?? "");
   const att = await prisma.invoiceAttachment.findUnique({
     where: { id },
@@ -502,8 +488,6 @@ function employeeFieldValue(e: ExportEmployee, key: string): string {
 export async function attachGridExport(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
 
   const invoiceId = String(form.get("invoiceId") ?? "");
   const employeeIds = form.getAll("employeeIds").map(String);
@@ -549,8 +533,6 @@ export async function attachGridExport(form: FormData): Promise<GatedResult> {
 export async function submitInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isInvoiceCreatorRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id }, include: { lineItems: true } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
@@ -580,8 +562,6 @@ export async function submitInvoice(form: FormData): Promise<GatedResult> {
 export async function approveInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || (me.role !== "ACCOUNT_MANAGER" && !isAdminRole(me.role))) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
@@ -614,8 +594,6 @@ export async function approveInvoice(form: FormData): Promise<GatedResult> {
 export async function rejectInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me) return { ok: false, error: "Not authenticated" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const reason = String(form.get("reason") ?? "").trim();
   if (!reason) return { ok: false, error: "A rejection reason is required." };
@@ -661,8 +639,6 @@ export async function rejectInvoice(form: FormData): Promise<GatedResult> {
 export async function approveInvoiceFinal(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
@@ -695,8 +671,6 @@ export async function approveInvoiceFinal(form: FormData): Promise<GatedResult> 
 export async function sendInvoiceToClient(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -766,8 +740,6 @@ ${rows}
 export async function markInvoicePaid(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
@@ -791,8 +763,6 @@ export async function markInvoicePaid(form: FormData): Promise<GatedResult> {
 export async function archiveInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me) return { ok: false, error: "Not authenticated" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
@@ -810,8 +780,6 @@ export async function archiveInvoice(form: FormData): Promise<GatedResult> {
 export async function unarchiveInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me) return { ok: false, error: "Not authenticated" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
@@ -831,16 +799,15 @@ export async function unarchiveInvoice(form: FormData): Promise<GatedResult> {
 export async function deleteInvoice(form: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
   if (!me || me.role !== "SUPER_ADMIN") return { ok: false, error: "Not authorized" };
-  const pinFail = await checkPin(form);
-  if (pinFail) return pinFail;
   const id = String(form.get("invoiceId") ?? "");
   const invoice = await prisma.invoice.findUnique({ where: { id } });
   if (!invoice) return { ok: false, error: "Invoice not found" };
 
   await prisma.invoice.delete({ where: { id } });
   revalidatePath("/admin/invoices");
-  // RULE 1: no server-side redirect() -- the client navigates to the list on ok.
-  return { ok: true };
+  // Plain-form delete button: redirect server-side to the list on success
+  // (NEXT_REDIRECT is the idiomatic way to navigate from a form action).
+  redirect("/admin/invoices");
 }
 
 export async function addInvoiceComment(form: FormData): Promise<void> {
