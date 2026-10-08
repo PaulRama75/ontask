@@ -598,9 +598,10 @@ export default async function GridPage({
           archivedCount={all.filter((e) => e.archived).length}
         />
 
-        {/* Wide table: shown md and up. The Employee column is frozen on
-            horizontal scroll and the header stays sticky on vertical scroll. */}
-        <div className="hidden max-h-[75vh] overflow-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur md:block">
+        {/* Data table (all screen sizes). The Employee column is frozen on
+            horizontal scroll and the header stays sticky on vertical scroll;
+            the box scrolls horizontally on narrow screens. */}
+        <div className="max-h-[75vh] overflow-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-20 bg-slate-900/95">
               <tr>
@@ -671,38 +672,6 @@ export default async function GridPage({
               })}
             </tbody>
           </table>
-        </div>
-
-        {/* Stacked card view: shown below md to avoid heavy left-right
-            scrolling. Reuses the SAME server data and the SAME cell components
-            (SecretField/SecretEditCell etc.) as the table — see buildRow. */}
-        <div className="space-y-3 md:hidden">
-          {employees.length === 0 && (
-            <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4 text-center text-slate-500">
-              {all.length === 0 ? "No employees yet." : "No employees match your search/filter."}
-            </div>
-          )}
-          {employees.map((e) => {
-            const { nameNode, cells } = buildRow(e);
-            return (
-              <div
-                key={e.id}
-                className={`rounded-lg border bg-slate-900/60 p-4 shadow-lg shadow-black/30 backdrop-blur ${
-                  e.approved ? "border-emerald-500/30 ring-inset ring-1 ring-emerald-500/20" : "border-white/10"
-                }`}
-              >
-                <div className="mb-3 border-b border-white/10 pb-2 font-medium text-white">{nameNode}</div>
-                <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
-                  {cells.map((c) => (
-                    <div key={c.key} className="contents">
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.label}</dt>
-                      <dd className="min-w-0 text-slate-200">{c.node}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            );
-          })}
         </div>
 
       </div>
