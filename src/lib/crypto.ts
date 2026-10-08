@@ -53,21 +53,35 @@ export function safeDecrypt(stored: string | null): string | null {
   }
 }
 
-// Encrypt an SSN for storage. Empty/whitespace-only → null (store nothing);
-// otherwise encrypt the trimmed value.
-export function encSsn(ssn: string | null | undefined): string | null {
-  if (ssn == null) return null;
-  const trimmed = ssn.trim();
+// Encrypt any secret ID field for storage (SSN, driver's license, safety
+// council, TWIC). Empty/whitespace-only → null (store nothing); otherwise
+// encrypt the trimmed value. FIX5: the first line is an idempotency guard so a
+// missed prefill-decrypt (an already-encrypted value flowing back in) can never
+// be double-encrypted.
+export function encField(value: string | null | undefined): string | null {
+  if (typeof value === "string" && isEncrypted(value)) return value;
+  if (value == null) return null;
+  const trimmed = value.trim();
   if (trimmed === "") return null;
   return encryptSecret(trimmed);
 }
 
-// Mask a decrypted SSN for display. Never reveals more than the last 4 digits,
-// and reveals no digit when fewer than 4 are present.
-export function maskSsn(decrypted: string | null): string {
+// Encrypt an SSN for storage. Thin wrapper over encField (behavior unchanged).
+export function encSsn(ssn: string | null | undefined): string | null {
+  return encField(ssn);
+}
+
+// Mask a decrypted secret ID for display. Never reveals more than the last 4
+// digits, and reveals no digit when fewer than 4 are present.
+export function maskLast4(decrypted: string | null): string {
   if (decrypted == null || decrypted.trim() === "") return "—";
   const digits = decrypted.replace(/\D/g, "");
   if (digits.length >= 4) return "•••••" + digits.slice(-4);
   if (digits.length >= 1) return "•".repeat(digits.length);
   return "—";
+}
+
+// Mask a decrypted SSN for display. Delegates to maskLast4 (values unchanged).
+export function maskSsn(decrypted: string | null): string {
+  return maskLast4(decrypted);
 }

@@ -9,7 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { notifyFlagTransitions, notifyProjectLeadDetailsSaved } from "@/lib/notifications";
 import { requirePin } from "@/lib/auth";
-import { encSsn } from "@/lib/crypto";
+import { encSsn, encField } from "@/lib/crypto";
 import type { GatedResult } from "@/lib/gatedResult";
 
 // Shared PIN step for the gated actions below. Maps requirePin's failure
@@ -303,6 +303,42 @@ export async function setEmployeeSsn(formData: FormData): Promise<GatedResult> {
   }
 
   const data = clear ? { ssn: null } : { ssn: encSsn(value) };
+  await prisma.employee.update({ where: { id }, data });
+  revalidatePath("/admin/grid");
+  return { ok: true };
+}
+
+// Dedicated, PIN-gated write for the driver's license column — byte-for-byte
+// identical to setEmployeeSsn with ssn -> driverLicense. The grid DL edit cell
+// never defaults to the stored value, so an empty submit means "leave
+// unchanged" (no-op); clearing is an explicit affordance that submits
+// clear="1" and maps to null. A non-empty value is encrypted at rest via
+// encField. Column-level write authorization (canEdit("driverLicense") + PL/PM
+// employee scope) is enforced via requireColumn, converted to a RETURN per the
+// GatedResult contract; the PIN is checked immediately after and is strictly
+// additive. This dedicated action is the single authoritative grid write path
+// for the DL column (the setEmployeeField 'driverLicense' case is left intact
+// but no longer the grid's write path).
+export async function setEmployeeDriversLicense(formData: FormData): Promise<GatedResult> {
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("driverLicense", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
+
+  const value = String(formData.get("value") ?? "").trim();
+  const clear = String(formData.get("clear") ?? "") === "1";
+
+  if (!clear && value === "") {
+    // Empty submit with no explicit clear: leave the stored value unchanged.
+    return { ok: true };
+  }
+
+  const data = clear ? { driversLicenseNumber: null } : { driversLicenseNumber: encField(value) };
   await prisma.employee.update({ where: { id }, data });
   revalidatePath("/admin/grid");
   return { ok: true };
