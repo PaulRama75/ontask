@@ -27,9 +27,9 @@ import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
 import PinUnlockLink from "../PinUnlockLink";
 import PinConfirmButton from "../PinConfirmButton";
-import SsnField from "../SsnField";
-import SsnEditCell from "./SsnEditCell";
-import { maskSsn, safeDecrypt } from "@/lib/crypto";
+import SecretField from "../SecretField";
+import SecretEditCell from "./SecretEditCell";
+import { maskSsn, maskLast4, safeDecrypt } from "@/lib/crypto";
 import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +142,12 @@ export default async function GridPage({
       const ssnPlain = safeDecrypt(e.ssn);
       const ssnDigits = ssnPlain ? ssnPlain.replace(/\D/g, "") : "";
       const ssnToken = ssnDigits ? `${ssnDigits} ${ssnDigits.slice(-4)}` : null;
+      // Driver's license is also encrypted at rest — decrypt it in SERVER
+      // scope only to build the search term so a search still matches the
+      // plaintext (mirrors the SSN decrypt-then-match above). The decrypted
+      // value is never written back onto the row handed to client cells;
+      // safeDecrypt returns null for legacy/corrupt rows (no throw).
+      const dlPlain = safeDecrypt(e.driversLicenseNumber);
       const haystack = [
         e.firstName,
         e.lastName,
@@ -153,7 +159,7 @@ export default async function GridPage({
         e.city,
         e.state,
         e.zip,
-        e.driversLicenseNumber,
+        dlPlain,
         e.site,
         ...e.certifications.map((c) => c.name),
       ]
@@ -396,23 +402,42 @@ export default async function GridPage({
                     {show("ssn") && (
                       <td className={`${td} whitespace-nowrap`}>
                         {editable("ssn") ? (
-                          <SsnEditCell employeeId={e.id} ssnMasked={maskSsn(safeDecrypt(e.ssn))} />
+                          <SecretEditCell
+                            employeeId={e.id}
+                            maskedValue={maskSsn(safeDecrypt(e.ssn))}
+                            field="ssn"
+                            label="SSN"
+                            canReveal={show("ssn")}
+                          />
                         ) : (
-                          <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
+                          <SecretField
+                            maskedValue={maskSsn(safeDecrypt(e.ssn))}
+                            employeeId={e.id}
+                            field="ssn"
+                            label="SSN"
+                            canReveal={show("ssn")}
+                          />
                         )}
                       </td>
                     )}
                     {show("driverLicense") && (
                       <td className={td}>
                         {editable("driverLicense") ? (
-                          <EditableCell
-                            id={e.id}
-                            column="driverLicense"
-                            value={e.driversLicenseNumber}
-                            width="w-28"
+                          <SecretEditCell
+                            employeeId={e.id}
+                            maskedValue={maskLast4(safeDecrypt(e.driversLicenseNumber))}
+                            field="driversLicense"
+                            label="Driver's license"
+                            canReveal={show("driverLicense")}
                           />
                         ) : (
-                          <div className="text-xs text-slate-400">{e.driversLicenseNumber || ""}</div>
+                          <SecretField
+                            maskedValue={maskLast4(safeDecrypt(e.driversLicenseNumber))}
+                            employeeId={e.id}
+                            field="driversLicense"
+                            label="Driver's license"
+                            canReveal={show("driverLicense")}
+                          />
                         )}
                         <DocLinks employeeId={e.id} docs={e.documents} category="LICENSE" canManage={canManageDocs} />
                         {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}

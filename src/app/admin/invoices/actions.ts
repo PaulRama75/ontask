@@ -443,7 +443,11 @@ function employeeFieldValue(e: ExportEmployee, key: string): string {
       // plaintext and corrupt rows (→ "—") without throwing.
       return maskSsn(safeDecrypt(e.ssn));
     case "driverLicense":
-      return e.driversLicenseNumber ?? "";
+      // Driver's license is encrypted at rest — never emit full plaintext or
+      // ciphertext to the persisted CSV; write only the masked last-4.
+      // maskSsn delegates to maskLast4, and safeDecrypt tolerates legacy
+      // plaintext/corrupt rows (→ "—") without throwing.
+      return maskSsn(safeDecrypt(e.driversLicenseNumber));
     case "safetyExpiry":
       return e.safetyCouncilExpiry ? e.safetyCouncilExpiry.toISOString().slice(0, 10) : "";
     case "twicExpiry":

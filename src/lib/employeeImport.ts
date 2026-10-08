@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
 import { prisma } from "./prisma";
-import { encSsn } from "./crypto";
+import { encSsn, encField } from "./crypto";
 
 export const MAX_IMPORT_ROWS = 500;
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -203,7 +203,13 @@ export async function parseImportFile(file: { name: string; buffer: Buffer }): P
       billRate: bill.value,
       projectLeadEmail: parseEmail(raw.projectLeadEmail ?? null, "Project Lead Email", errors),
       projectManagerEmail: parseEmail(raw.projectManagerEmail ?? null, "Project Manager Email", errors),
-      driversLicenseNumber: str(raw.driversLicenseNumber ?? null),
+      // Encrypt the secret ID at this single WRITE point (the record built
+      // here feeds importRows' createMany — this worktree has NO update
+      // branch and no ciphertext-equality duplicate check). If an update
+      // branch is ever added, it must encrypt driversLicenseNumber too.
+      // (safetyCouncilId/twicNumber are not import columns — only their
+      // expiry DATE fields are, and those stay plaintext.)
+      driversLicenseNumber: encField(str(raw.driversLicenseNumber ?? null)),
       ssn: encSsn(str(raw.ssn ?? null)),
       safetyCouncilExpiry: safety.value,
       twicExpiry: twic.value,

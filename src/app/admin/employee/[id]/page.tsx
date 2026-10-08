@@ -15,8 +15,8 @@ import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } fro
 import DocRow from "./DocRow";
 import PinUnlockLink from "../../PinUnlockLink";
 import PinConfirmButton from "../../PinConfirmButton";
-import SsnField from "../../SsnField";
-import { maskSsn, safeDecrypt } from "@/lib/crypto";
+import SecretField from "../../SecretField";
+import { maskSsn, maskLast4, safeDecrypt } from "@/lib/crypto";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
 import { submitStatusChange } from "./status-change/actions";
@@ -565,14 +565,64 @@ export default async function EmployeeLibraryPage({
               <div>
                 <dt className="text-xs uppercase tracking-wide text-slate-500">SSN</dt>
                 <dd className="text-white">
-                  <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
+                  <SecretField
+                    maskedValue={maskSsn(safeDecrypt(e.ssn))}
+                    employeeId={e.id}
+                    field="ssn"
+                    label="SSN"
+                    canReveal={canView(access, "ssn")}
+                  />
                 </dd>
               </div>
             )}
-            <Detail label="Driver's license" value={e.driversLicenseNumber} />
+            {/* The three ID fields are encrypted at rest; show only the masked
+                last-4 via SecretField, each wrapped in its own per-field
+                canView guard (deliberate tightening — never exposes a field to
+                a role that could not already see it; per FIX1, SAFETY never
+                reaches this {canFullView} section at all). */}
+            {canView(access, "driverLicense") && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Driver&apos;s license</dt>
+                <dd className="text-white">
+                  <SecretField
+                    maskedValue={maskLast4(safeDecrypt(e.driversLicenseNumber))}
+                    employeeId={e.id}
+                    field="driversLicense"
+                    label="Driver's license"
+                    canReveal={canView(access, "driverLicense")}
+                  />
+                </dd>
+              </div>
+            )}
             <Detail label="Address" value={[e.addressLine1, e.addressLine2, e.city, e.state, e.zip].filter(Boolean).join(", ")} />
-            <Detail label="Safety Council ID" value={e.safetyCouncilId} />
-            <Detail label="TWIC #" value={e.twicNumber} />
+            {canView(access, "safetyExpiry") && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Safety Council ID</dt>
+                <dd className="text-white">
+                  <SecretField
+                    maskedValue={maskLast4(safeDecrypt(e.safetyCouncilId))}
+                    employeeId={e.id}
+                    field="safetyCouncil"
+                    label="Safety Council ID"
+                    canReveal={canView(access, "safetyExpiry")}
+                  />
+                </dd>
+              </div>
+            )}
+            {canView(access, "twicExpiry") && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">TWIC #</dt>
+                <dd className="text-white">
+                  <SecretField
+                    maskedValue={maskLast4(safeDecrypt(e.twicNumber))}
+                    employeeId={e.id}
+                    field="twic"
+                    label="TWIC #"
+                    canReveal={canView(access, "twicExpiry")}
+                  />
+                </dd>
+              </div>
+            )}
           </dl>
         </section>
         )}

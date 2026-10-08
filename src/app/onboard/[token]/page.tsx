@@ -56,9 +56,14 @@ export default async function OnboardPage({
             city: e.city,
             state: e.state,
             zip: e.zip,
-            driversLicenseNumber: e.driversLicenseNumber,
-            safetyCouncilId: e.safetyCouncilId,
-            twicNumber: e.twicNumber,
+            // The three ID fields are encrypted at rest (same as SSN); the
+            // data subject sees their OWN values decrypted outside the staff
+            // PIN gate. safeDecrypt tolerates legacy plaintext and corrupt
+            // rows (→ null); a resubmit re-encrypts via encField, whose FIX5
+            // idempotency guard is the backstop if a decrypt is ever missed.
+            driversLicenseNumber: safeDecrypt(e.driversLicenseNumber),
+            safetyCouncilId: safeDecrypt(e.safetyCouncilId),
+            twicNumber: safeDecrypt(e.twicNumber),
             status: e.status,
           }}
         />
