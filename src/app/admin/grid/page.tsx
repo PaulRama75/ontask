@@ -29,6 +29,7 @@ import PinUnlockLink from "../PinUnlockLink";
 import PinConfirmButton from "../PinConfirmButton";
 import SecretField from "../SecretField";
 import SecretEditCell from "./SecretEditCell";
+import StatusPill from "../StatusPill";
 import { maskSsn, maskLast4, safeDecrypt } from "@/lib/crypto";
 import { formatCurrency } from "@/lib/currency";
 
@@ -503,15 +504,10 @@ export default async function GridPage({
           </button>
         </form>
       ) : (
-        <span
-          className={
-            e.approved
-              ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
-              : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
-          }
-        >
-          {e.approved ? "Approved ✓" : "Pending"}
-        </span>
+        <StatusPill
+          label={e.approved ? "Approved ✓" : "Pending"}
+          tone={e.approved ? "active" : "inactive"}
+        />
       ),
     );
     push(

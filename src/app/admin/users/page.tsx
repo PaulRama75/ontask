@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import NewUserForm from "./NewUserForm";
 import PinConfirmButton from "../PinConfirmButton";
+import { pageClass, cardClass } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function UsersPage() {
   const onboardingHrRecipient = users.find((u) => u.receivesOnboardingHrEmails) ?? null;
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
+    <main className={pageClass}>
       <h1 className="text-2xl font-bold text-white">Users</h1>
       <p className="mt-1 text-sm text-slate-400">
         Create staff accounts and assign roles. Roles drive column access.
@@ -37,7 +38,7 @@ export default async function UsersPage() {
 
       <NewUserForm action={createUser} />
 
-      <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-400 shadow-lg shadow-black/30 backdrop-blur">
+      <section className={`mt-6 p-4 text-sm text-slate-400 ${cardClass}`}>
         Invoice admin notifications (final-approval alerts, "Email Admins") go to{" "}
         {invoiceAdminRecipient ? (
           <span className="font-medium text-slate-200">
@@ -49,7 +50,7 @@ export default async function UsersPage() {
         . Pick "Notify" on an Admin/Super Admin below to designate a single recipient instead.
       </section>
 
-      <section className="mt-4 rounded-lg border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-400 shadow-lg shadow-black/30 backdrop-blur">
+      <section className={`mt-4 p-4 text-sm text-slate-400 ${cardClass}`}>
         Onboarding submission emails go to{" "}
         {onboardingHrRecipient ? (
           <span className="font-medium text-slate-200">
@@ -62,13 +63,13 @@ export default async function UsersPage() {
         user below to designate a single recipient instead.
       </section>
 
-      <section className="mt-4 rounded-lg border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-400 shadow-lg shadow-black/30 backdrop-blur">
+      <section className={`mt-4 p-4 text-sm text-slate-400 ${cardClass}`}>
         "Document access" gives a specific person full view/download access to every employee's
         documents, regardless of their role -- unlike the notification settings above, any number of
         people can have this on at once.
       </section>
 
-      <section className="mt-6 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+      <section className={`mt-6 overflow-x-auto ${cardClass}`}>
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
             <tr>
