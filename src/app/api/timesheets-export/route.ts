@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getNavAccess } from "@/lib/rbac";
 import { fetchTimesheetDays } from "@/lib/timesheetReport";
 import { isoDate, parseIsoDate } from "@/lib/timesheetWeek";
+import { consumeUnlock } from "@/lib/pinGate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,12 @@ export async function GET(req: Request) {
   if (!me) return new Response("Unauthorized", { status: 401 });
   const nav = await getNavAccess(me.role);
   if (!nav.timesheets) return new Response("Forbidden", { status: 403 });
+
+  // Additive PIN gate — consumes a single-use unlock minted by the client
+  // after a verified PIN (verifyPinForUnlock). Runs AFTER all existing auth.
+  if (!(await consumeUnlock("export"))) {
+    return new Response("PIN required", { status: 401, headers: { "x-pin-required": "1" } });
+  }
 
   const url = new URL(req.url);
   const employeeId = url.searchParams.get("employeeId") || undefined;

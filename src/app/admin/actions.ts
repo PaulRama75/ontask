@@ -8,6 +8,18 @@ import { nanoid } from "nanoid";
 import { getCurrentUser } from "@/lib/auth";
 import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { notifyFlagTransitions, notifyProjectLeadDetailsSaved } from "@/lib/notifications";
+import { requirePin } from "@/lib/auth";
+import { encSsn } from "@/lib/crypto";
+import type { GatedResult } from "@/lib/gatedResult";
+
+// Shared PIN step for the gated actions below. Maps requirePin's failure
+// union onto the GatedResult channel (NO_PIN -> pinRequired so the dialog
+// shows the setup CTA). Returns null on success so the caller proceeds.
+async function checkPin(form: FormData): Promise<{ ok: false; error: string; pinRequired?: boolean } | null> {
+  const pin = await requirePin(String(form.get("pin") ?? ""));
+  if (!pin.ok) return { ok: false, error: pin.error, pinRequired: pin.code === "NO_PIN" };
+  return null;
+}
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
 const ALLOWED_MIME = new Set([
@@ -181,11 +193,17 @@ async function syncRatesStatus(id: string): Promise<void> {
 }
 
 // Project Lead: set the employee's pay or bill rate.
-export async function setRate(formData: FormData): Promise<void> {
+export async function setRate(formData: FormData): Promise<GatedResult> {
   const id = String(formData.get("employeeId") ?? "");
   const field = String(formData.get("field") ?? "");
-  if (!id || (field !== "payRate" && field !== "billRate")) return;
-  await requireColumn(field, "edit", id);
+  if (!id || (field !== "payRate" && field !== "billRate")) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn(field, "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
   const raw = String(formData.get("value") ?? "").trim();
   const parsed = raw === "" ? null : Number(raw);
   const value = parsed === null || Number.isNaN(parsed) ? null : parsed;
@@ -195,6 +213,7 @@ export async function setRate(formData: FormData): Promise<void> {
   });
   await syncRatesStatus(id);
   revalidatePath("/admin/grid");
+  return { ok: true };
 }
 
 // Inline grid editing of a single employee field/column. The access map
@@ -254,6 +273,39 @@ export async function setEmployeeField(formData: FormData): Promise<void> {
 
   await prisma.employee.update({ where: { id }, data });
   revalidatePath("/admin/grid");
+}
+
+// Dedicated, PIN-gated write for the SSN column (Rule 2 — setEmployeeField is
+// left untouched). The grid SSN edit cell never defaults to the stored value,
+// so an empty submit means "leave unchanged" (no-op) rather than clearing it;
+// clearing is an explicit affordance that submits clear="1" and maps to null.
+// A non-empty value is encrypted at rest via encSsn. The column-level write
+// authorization (canEdit("ssn") + PL/PM employee scope) is enforced via the
+// shared requireColumn helper, converted to a RETURN here per the GatedResult
+// contract; the PIN is checked immediately after and is strictly additive.
+export async function setEmployeeSsn(formData: FormData): Promise<GatedResult> {
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("ssn", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
+
+  const value = String(formData.get("value") ?? "").trim();
+  const clear = String(formData.get("clear") ?? "") === "1";
+
+  if (!clear && value === "") {
+    // Empty submit with no explicit clear: leave the stored SSN unchanged.
+    return { ok: true };
+  }
+
+  const data = clear ? { ssn: null } : { ssn: encSsn(value) };
+  await prisma.employee.update({ where: { id }, data });
+  revalidatePath("/admin/grid");
+  return { ok: true };
 }
 
 // Attach a document to an employee from the data grid. The column key both
@@ -325,19 +377,22 @@ export async function renameEmployeeDocument(formData: FormData): Promise<void> 
 }
 
 // Admin-only: permanently remove an uploaded document (storage file + DB row).
-export async function deleteEmployeeDocument(formData: FormData): Promise<void> {
+export async function deleteEmployeeDocument(formData: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
-  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
   const documentId = String(formData.get("documentId") ?? "");
   const employeeId = String(formData.get("employeeId") ?? "");
-  if (!documentId) return;
+  if (!documentId) return { ok: false, error: "No document specified." };
 
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
-  if (!doc) return;
+  if (!doc) return { ok: true };
   await deleteFile(doc.storageKey);
   await prisma.document.delete({ where: { id: documentId } });
   revalidatePath("/admin/grid");
   if (employeeId) revalidatePath(`/admin/employee/${employeeId}`);
+  return { ok: true };
 }
 
 // Tri-state boolean from a form value: "true" -> true, "false" -> false, else null.
@@ -497,41 +552,58 @@ export async function assignProjectContact(formData: FormData): Promise<void> {
 }
 
 // Project Lead: toggle active / inactive.
-export async function setActive(formData: FormData): Promise<void> {
+export async function setActive(formData: FormData): Promise<GatedResult> {
   const id = String(formData.get("employeeId") ?? "");
-  if (id) await requireColumn("active", "edit", id);
-  if (!id) return;
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("active", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
   const active = String(formData.get("active") ?? "") === "true";
   await prisma.employee.update({
     where: { id },
     data: { active },
   });
   revalidatePath("/admin/grid");
+  return { ok: true };
 }
 
-export async function setArchived(formData: FormData): Promise<void> {
+export async function setArchived(formData: FormData): Promise<GatedResult> {
   const id = String(formData.get("employeeId") ?? "");
-  if (id) await requireColumn("archived", "edit", id);
-  if (!id) return;
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("archived", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
   const archived = String(formData.get("archived") ?? "") === "true";
   await prisma.employee.update({
     where: { id },
     data: { archived },
   });
   revalidatePath("/admin/grid");
+  return { ok: true };
 }
 
 // Permanently removes an employee record (and, via cascade, their
 // certifications, documents, and onboarding link). Admin-only -- unlike
 // archive, this can't be undone.
-export async function deleteEmployee(formData: FormData): Promise<void> {
+export async function deleteEmployee(formData: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
-  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
   const id = String(formData.get("employeeId") ?? "");
-  if (!id) return;
+  if (!id) return { ok: false, error: "No employee specified." };
   await prisma.employee.delete({ where: { id } });
   revalidatePath("/admin");
   revalidatePath("/admin/grid");
+  return { ok: true };
 }
 
 // Admin-only one-off share: lets a specific user view/download one
@@ -552,13 +624,16 @@ export async function grantDocumentAccess(formData: FormData): Promise<void> {
   revalidatePath(`/admin/employee/${employeeId}`);
 }
 
-export async function revokeDocumentAccess(formData: FormData): Promise<void> {
+export async function revokeDocumentAccess(formData: FormData): Promise<GatedResult> {
   const me = await getCurrentUser();
-  if (!me || !isAdminRole(me.role)) throw new Error("Not authorized");
+  if (!me || !isAdminRole(me.role)) return { ok: false, error: "Not authorized" };
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
   const employeeId = String(formData.get("employeeId") ?? "");
   const userId = String(formData.get("userId") ?? "");
-  if (!employeeId || !userId) return;
+  if (!employeeId || !userId) return { ok: false, error: "Missing employee or user." };
 
   await prisma.employeeDocumentGrant.deleteMany({ where: { employeeId, userId } });
   revalidatePath(`/admin/employee/${employeeId}`);
+  return { ok: true };
 }

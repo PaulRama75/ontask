@@ -14,6 +14,10 @@ import {
 } from "@/lib/rbac";
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 import DocRow from "./DocRow";
+import PinUnlockLink from "../../PinUnlockLink";
+import PinConfirmButton from "../../PinConfirmButton";
+import SsnField from "../../SsnField";
+import { maskSsn, safeDecrypt } from "@/lib/crypto";
 import CurrencyInput from "../../CurrencyInput";
 import { formatCurrency } from "@/lib/currency";
 import { submitStatusChange } from "./status-change/actions";
@@ -583,7 +587,14 @@ export default async function EmployeeLibraryPage({
           <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <Detail label="Email" value={e.email} />
             <Detail label="Phone" value={e.phone} />
-            <Detail label="SSN" value={e.ssn} />
+            {canView(access, "ssn") && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">SSN</dt>
+                <dd className="text-white">
+                  <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
+                </dd>
+              </div>
+            )}
             <Detail label="Driver's license" value={e.driversLicenseNumber} />
             <Detail label="Address" value={[e.addressLine1, e.addressLine2, e.city, e.state, e.zip].filter(Boolean).join(", ")} />
             <Detail label="Safety Council ID" value={e.safetyCouncilId} />
@@ -598,12 +609,13 @@ export default async function EmployeeLibraryPage({
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Documents</h2>
             {e.documents.length > 0 && (
-              <a
+              <PinUnlockLink
                 href={`/api/documents-export/${e.id}`}
+                scope="export"
                 className="text-sm text-cyan-400 hover:underline"
               >
                 Download all
-              </a>
+              </PinUnlockLink>
             )}
           </div>
           <div className="mt-3 space-y-4">
@@ -701,11 +713,14 @@ export default async function EmployeeLibraryPage({
                 {existingGrants.map((g) => (
                   <li key={g.id} className="flex items-center justify-between text-sm">
                     <span className="text-white">{g.user.name || g.user.email}</span>
-                    <form action={revokeDocumentAccess}>
-                      <input type="hidden" name="employeeId" value={id} />
-                      <input type="hidden" name="userId" value={g.userId} />
-                      <button className="text-xs text-rose-300 hover:underline">Revoke</button>
-                    </form>
+                    <PinConfirmButton
+                      action={revokeDocumentAccess}
+                      fields={{ employeeId: id, userId: g.userId }}
+                      confirmMessage={`Revoke document access for ${g.user.name || g.user.email}?`}
+                      className="text-xs text-rose-300 hover:underline"
+                    >
+                      Revoke
+                    </PinConfirmButton>
                   </li>
                 ))}
               </ul>

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { safeDecrypt } from "@/lib/crypto";
 import OnboardingForm from "./OnboardingForm";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,10 @@ export default async function OnboardPage({
             lastName: e.lastName,
             email: e.email,
             phone: e.phone,
-            ssn: e.ssn,
+            // The data subject sees their OWN SSN decrypted (outside the staff
+            // PIN gate); resubmitting re-encrypts via encSsn. safeDecrypt
+            // tolerates legacy plaintext and corrupt rows (→ null).
+            ssn: safeDecrypt(e.ssn),
             addressLine1: e.addressLine1,
             addressLine2: e.addressLine2,
             city: e.city,

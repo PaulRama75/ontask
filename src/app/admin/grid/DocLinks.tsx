@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { deleteEmployeeDocument, renameEmployeeDocument } from "../actions";
-import ConfirmSubmitButton from "../ConfirmSubmitButton";
+import PinConfirmButton from "../PinConfirmButton";
+import PinUnlockLink from "../PinUnlockLink";
 
 type DocLite = { id: string; fileName: string; category: string; label: string | null };
 
@@ -79,14 +80,14 @@ function DocRow({
 
   return (
     <div className="flex items-center gap-1.5">
-      <a
+      <PinUnlockLink
         href={`/api/files/${doc.id}`}
-        target="_blank"
+        scope="file"
         className="text-cyan-400 hover:underline"
         title={doc.fileName}
       >
         {displayName}
-      </a>
+      </PinUnlockLink>
       {canManage && (
         <>
           <button
@@ -97,16 +98,14 @@ function DocRow({
           >
             ✎
           </button>
-          <form action={deleteEmployeeDocument}>
-            <input type="hidden" name="documentId" value={doc.id} />
-            <input type="hidden" name="employeeId" value={employeeId} />
-            <ConfirmSubmitButton
-              confirmMessage={`Delete "${doc.fileName}"? This can't be undone.`}
-              className="text-xs text-rose-400 hover:text-rose-300"
-            >
-              ✕
-            </ConfirmSubmitButton>
-          </form>
+          <PinConfirmButton
+            action={deleteEmployeeDocument}
+            fields={{ documentId: doc.id, employeeId }}
+            confirmMessage={`Delete "${doc.fileName}"? This can't be undone.`}
+            className="text-xs text-rose-400 hover:text-rose-300"
+          >
+            ✕
+          </PinConfirmButton>
         </>
       )}
     </div>

@@ -6,6 +6,7 @@ import { getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
 import { fetchTimesheetDays, scopedEmployeeIds, summarizeByEmployee } from "@/lib/timesheetReport";
 import { isoDate, parseIsoDate } from "@/lib/timesheetWeek";
 import ImportTimesheets from "./ImportTimesheets";
+import PinUnlockLink from "../PinUnlockLink";
 
 export const dynamic = "force-dynamic";
 
@@ -122,9 +123,9 @@ export default async function TimesheetsReportPage({
           <a href="/admin/timesheets" className="text-xs text-slate-400 hover:underline">
             Clear
           </a>
-          <a href={exportHref} className="ml-auto rounded-md border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
+          <PinUnlockLink href={exportHref} scope="export" className="ml-auto rounded-md border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
             Export ({rows.length} rows)
-          </a>
+          </PinUnlockLink>
         </form>
 
         <ImportTimesheets />

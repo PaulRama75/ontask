@@ -25,6 +25,11 @@ import UploadCell from "./UploadCell";
 import FlagCell from "./FlagCell";
 import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
+import PinUnlockLink from "../PinUnlockLink";
+import PinConfirmButton from "../PinConfirmButton";
+import SsnField from "../SsnField";
+import SsnEditCell from "./SsnEditCell";
+import { maskSsn, safeDecrypt } from "@/lib/crypto";
 import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
@@ -129,12 +134,20 @@ export default async function GridPage({
     if (restrictedSites && !(e.site && restrictedSites.has(e.site))) return false;
     // Text search across the visible identity/contact fields + cert names.
     if (needle) {
+      // SSN is encrypted at rest, so decrypt it in SERVER scope only to build
+      // a search token (all digits + the last 4) — the decrypted value is used
+      // solely for matching here and is never written back onto the row objects
+      // handed to client cells. safeDecrypt returns null for legacy/corrupt
+      // rows, which simply contribute no SSN term (no throw).
+      const ssnPlain = safeDecrypt(e.ssn);
+      const ssnDigits = ssnPlain ? ssnPlain.replace(/\D/g, "") : "";
+      const ssnToken = ssnDigits ? `${ssnDigits} ${ssnDigits.slice(-4)}` : null;
       const haystack = [
         e.firstName,
         e.lastName,
         e.email,
         e.phone,
-        e.ssn,
+        ssnToken,
         e.addressLine1,
         e.addressLine2,
         e.city,
@@ -201,12 +214,13 @@ export default async function GridPage({
           </div>
           <div className="flex items-center gap-4">
             {canLibrary && (
-              <a
+              <PinUnlockLink
                 href="/api/documents-export"
+                scope="export"
                 className="text-sm text-cyan-400 hover:underline"
               >
                 Download all documents
-              </a>
+              </PinUnlockLink>
             )}
             <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
               ← Admin home
@@ -293,13 +307,14 @@ export default async function GridPage({
                           </span>
                         )}
                         {canLibrary && e.documents.length > 0 && (
-                          <a
+                          <PinUnlockLink
                             href={`/api/documents-export/${e.id}`}
+                            scope="export"
                             title={`Download ${name}'s documents`}
                             className="ml-1 text-xs font-normal text-slate-500 hover:text-cyan-400"
                           >
                             ⬇
-                          </a>
+                          </PinUnlockLink>
                         )}
                       </td>
                     )}
@@ -315,21 +330,18 @@ export default async function GridPage({
                     {show("active") && (
                       <td className={`${td} whitespace-nowrap text-center`}>
                         {editable("active") ? (
-                          <form action={setActive}>
-                            <input type="hidden" name="employeeId" value={e.id} />
-                            <input type="hidden" name="active" value={(!e.active).toString()} />
-                            <button
-                              type="submit"
-                              className={
-                                e.active
-                                  ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-                                  : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
-                              }
-                              title="Click to toggle"
-                            >
-                              {e.active ? "Active" : "Inactive"}
-                            </button>
-                          </form>
+                          <PinConfirmButton
+                            action={setActive}
+                            fields={{ employeeId: e.id, active: (!e.active).toString() }}
+                            confirmMessage={e.active ? "Deactivate this employee?" : "Activate this employee?"}
+                            className={
+                              e.active
+                                ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                                : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
+                            }
+                          >
+                            {e.active ? "Active" : "Inactive"}
+                          </PinConfirmButton>
                         ) : (
                           <span
                             className={
@@ -386,9 +398,9 @@ export default async function GridPage({
                     {show("ssn") && (
                       <td className={`${td} whitespace-nowrap`}>
                         {editable("ssn") ? (
-                          <EditableCell id={e.id} column="ssn" value={e.ssn} width="w-24" />
+                          <SsnEditCell employeeId={e.id} ssnMasked={maskSsn(safeDecrypt(e.ssn))} />
                         ) : (
-                          e.ssn || "—"
+                          <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
                         )}
                       </td>
                     )}
@@ -595,21 +607,18 @@ export default async function GridPage({
                     {show("archived") && (
                       <td className={`${td} whitespace-nowrap text-center`}>
                         {editable("archived") ? (
-                          <form action={setArchived}>
-                            <input type="hidden" name="employeeId" value={e.id} />
-                            <input type="hidden" name="archived" value={(!e.archived).toString()} />
-                            <button
-                              type="submit"
-                              className={
-                                e.archived
-                                  ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
-                                  : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
-                              }
-                              title="Click to toggle"
-                            >
-                              {e.archived ? "Unarchive" : "Archive"}
-                            </button>
-                          </form>
+                          <PinConfirmButton
+                            action={setArchived}
+                            fields={{ employeeId: e.id, archived: (!e.archived).toString() }}
+                            confirmMessage={e.archived ? "Unarchive this employee?" : "Archive this employee?"}
+                            className={
+                              e.archived
+                                ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
+                                : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+                            }
+                          >
+                            {e.archived ? "Unarchive" : "Archive"}
+                          </PinConfirmButton>
                         ) : (
                           <span
                             className={

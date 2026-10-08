@@ -19,6 +19,20 @@ export function verifyPassword(password: string, stored: string): boolean {
   return keyBuf.length === dk.length && timingSafeEqual(keyBuf, dk);
 }
 
+export function hashPin(pin: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const dk = scryptSync(pin, salt, 64).toString("hex");
+  return `${salt}:${dk}`;
+}
+
+export function verifyPin(pin: string, stored: string): boolean {
+  const [salt, key] = stored.split(":");
+  if (!salt || !key) return false;
+  const dk = scryptSync(pin, salt, 64);
+  const keyBuf = Buffer.from(key, "hex");
+  return keyBuf.length === dk.length && timingSafeEqual(keyBuf, dk);
+}
+
 export type SessionUser = {
   id: string;
   email: string;
@@ -72,4 +86,28 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     role: u.role,
     hasFullDocumentAccess: u.hasFullDocumentAccess,
   };
+}
+
+export type RequirePinResult =
+  | { ok: true; userId: string }
+  | { ok: false; code: "NO_USER" | "NO_PIN" | "BAD_PIN"; error: string };
+
+// Verify the caller's security PIN fresh on every call. pinHash is NOT part of
+// SessionUser, so it is re-read from the DB each time — no caching, no window.
+export async function requirePin(pin: string): Promise<RequirePinResult> {
+  const me = await getCurrentUser();
+  if (!me) return { ok: false, code: "NO_USER", error: "Not signed in." };
+
+  const user = await prisma.user.findUnique({
+    where: { id: me.id },
+    select: { pinHash: true },
+  });
+  if (!user) return { ok: false, code: "NO_USER", error: "Not signed in." };
+  if (!user.pinHash) {
+    return { ok: false, code: "NO_PIN", error: "You must set a security PIN first." };
+  }
+  if (!/^\d{4,6}$/.test(pin) || !verifyPin(pin, user.pinHash)) {
+    return { ok: false, code: "BAD_PIN", error: "Incorrect security PIN." };
+  }
+  return { ok: true, userId: me.id };
 }

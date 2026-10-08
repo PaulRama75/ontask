@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getFile } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
 import { getAccessMap, canAccessEmployeeDocuments, hasEmployeeDocumentGrant } from "@/lib/rbac";
+import { consumeUnlock } from "@/lib/pinGate";
 
 // Serves an uploaded employee document. Same permission as opening the
 // employee's document library page and the zip exports -- one gate for
@@ -24,6 +25,12 @@ export async function GET(
   const granted = await hasEmployeeDocumentGrant(me.id, doc.employeeId);
   if (!canAccessEmployeeDocuments(access, me, doc.employee, granted)) {
     return new Response("Forbidden", { status: 403 });
+  }
+
+  // Additive PIN gate — consumes a single-use unlock minted by the client
+  // after a verified PIN (verifyPinForUnlock). Runs AFTER all existing auth.
+  if (!(await consumeUnlock("file"))) {
+    return new Response("PIN required", { status: 401, headers: { "x-pin-required": "1" } });
   }
 
   const file = await getFile(doc.storageKey);
