@@ -44,3 +44,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# agent workflow scratch + git worktrees (never commit)
+/.agents
+/.worktrees
