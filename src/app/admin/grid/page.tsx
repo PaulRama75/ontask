@@ -56,7 +56,7 @@ function hasBenefits(employmentType: string | null): boolean | null {
 export default async function GridPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; archived?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; archived?: string; sort?: string; dir?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
@@ -97,8 +97,12 @@ export default async function GridPage({
     return canLibrary || canPLDetails || isAssignedProjectLeadOrManager(meAuth, e) || grantedEmployeeIds.has(e.id);
   }
 
-  const { q = "", status = "all", archived: archivedParam } = await searchParams;
+  const params = await searchParams;
+  const { q = "", status = "all", archived: archivedParam } = params;
   const showArchived = archivedParam === "1";
+  // Optional A-Z / Z-A sort on the Employee name; otherwise newest first.
+  const sortByName = params.sort === "name";
+  const nameDir: "asc" | "desc" = params.dir === "desc" ? "desc" : "asc";
 
   // Site-level (row) access: a non-admin with assigned sites only sees those.
   const restrictedSites = isAdminRole(me.role) ? null : await getRestrictedSites(me.id);
@@ -122,7 +126,7 @@ export default async function GridPage({
   const duplicateIds = findDuplicateEmployeeIds(all);
 
   const needle = q.trim().toLowerCase();
-  const employees = all.filter((e) => {
+  const filtered = all.filter((e) => {
     // Archived employees are hidden from every other view until explicitly shown.
     if (e.archived !== showArchived) return false;
     // Site-level access: restricted users only see their assigned sites.
@@ -158,6 +162,29 @@ export default async function GridPage({
     if (status === "duplicates" && !duplicateIds.has(e.id)) return false;
     return true;
   });
+
+  const displayName = (e: { firstName: string | null; lastName: string | null }) =>
+    [e.firstName, e.lastName].filter(Boolean).join(" ").trim();
+  const employees = sortByName
+    ? [...filtered].sort((a, b) => {
+        const an = displayName(a);
+        const bn = displayName(b);
+        // Unnamed rows always sink to the bottom.
+        if (!an || !bn) return an ? -1 : bn ? 1 : 0;
+        const c = an.localeCompare(bn, undefined, { sensitivity: "base" });
+        return nameDir === "asc" ? c : -c;
+      })
+    : filtered;
+
+  // Header link: first click sorts A-Z, then toggles Z-A / A-Z. Keeps the
+  // current search/filter.
+  const nameSortHref = (() => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (typeof v === "string" && v) sp.set(k, v);
+    sp.set("sort", "name");
+    sp.set("dir", sortByName && nameDir === "asc" ? "desc" : "asc");
+    return `/admin/grid?${sp.toString()}`;
+  })();
 
   // Grid columns in display order, each mapped to an access key.
   const gridCols = [
@@ -240,7 +267,20 @@ export default async function GridPage({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                {show("name") && <th className={nameTh}>Employee</th>}
+                {show("name") && (
+                  <th className={nameTh}>
+                    <Link
+                      href={nameSortHref}
+                      title={sortByName && nameDir === "asc" ? "Sort Z to A" : "Sort A to Z"}
+                      className="flex items-center gap-1 hover:text-white"
+                    >
+                      Employee
+                      <span className={sortByName ? "text-cyan-400" : "text-slate-600"}>
+                        {sortByName ? (nameDir === "asc" ? "▲" : "▼") : "▲▼"}
+                      </span>
+                    </Link>
+                  </th>
+                )}
                 {show("site") && <th className={th}>Site</th>}
                 {show("active") && <th className={th}>Status</th>}
                 {show("address") && <th className={th}>Address</th>}
