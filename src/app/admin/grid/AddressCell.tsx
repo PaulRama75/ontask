@@ -4,7 +4,6 @@ import { setEmployeeField } from "../actions";
 
 type Addr = {
   addressLine1: string | null;
-  addressLine2: string | null;
   city: string | null;
   state: string | null;
   zip: string | null;
@@ -31,14 +30,6 @@ export default function AddressCell({ id, addr }: { id: string; addr: Addr }) {
         name="addressLine1"
         defaultValue={addr.addressLine1 ?? ""}
         placeholder="Address line 1"
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        className={`w-48 ${cls}`}
-      />
-      <input
-        name="addressLine2"
-        defaultValue={addr.addressLine2 ?? ""}
-        placeholder="Address line 2"
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         className={`w-48 ${cls}`}

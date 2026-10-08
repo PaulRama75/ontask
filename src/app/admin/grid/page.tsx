@@ -274,7 +274,7 @@ export default async function GridPage({
               )}
               {employees.map((e) => {
                 const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)";
-                const address = [e.addressLine1, e.addressLine2, e.city, e.state, e.zip]
+                const address = [e.addressLine1, e.city, e.state, e.zip]
                   .filter(Boolean)
                   .join(", ");
                 const certNames = e.certifications.map((c) => c.name).join(", ");
@@ -362,7 +362,6 @@ export default async function GridPage({
                             id={e.id}
                             addr={{
                               addressLine1: e.addressLine1,
-                              addressLine2: e.addressLine2,
                               city: e.city,
                               state: e.state,
                               zip: e.zip,

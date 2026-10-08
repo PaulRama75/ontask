@@ -242,7 +242,9 @@ export async function setEmployeeField(formData: FormData): Promise<void> {
     case "address":
       data = {
         addressLine1: orNull(str("addressLine1")),
-        addressLine2: orNull(str("addressLine2")),
+        // The grid no longer shows line 2 -- keep whatever is stored unless
+        // a form actually sends the field.
+        ...(formData.has("addressLine2") ? { addressLine2: orNull(str("addressLine2")) } : {}),
         city: orNull(str("city")),
         state: orNull(str("state")),
         zip: orNull(str("zip")),
