@@ -1,0 +1,7 @@
+{
+  "task_id": "task-ui-security",
+  "task_description": "Generalize the existing SSN security feature (AES-256-GCM encrypt-at-rest + PIN-gated reveal + masked last-4 display) to driver's license, Safety Council ID, and TWIC number; add a responsive data-grid (frozen first column + mobile card view) to kill left-right scroll; and roll a cohesive dark-theme polish across the app. Next.js 16 App Router. No test runner: verify with npx tsc --noEmit and npm run build from the worktree root. No Prisma migration needed (the three ID fields are already String?).",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}
