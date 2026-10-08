@@ -27,9 +27,10 @@ import FrcCell from "./FrcCell";
 import DocLinks from "./DocLinks";
 import PinUnlockLink from "../PinUnlockLink";
 import PinConfirmButton from "../PinConfirmButton";
-import SsnField from "../SsnField";
-import SsnEditCell from "./SsnEditCell";
-import { maskSsn, safeDecrypt } from "@/lib/crypto";
+import SecretField from "../SecretField";
+import SecretEditCell from "./SecretEditCell";
+import StatusPill from "../StatusPill";
+import { maskSsn, maskLast4, safeDecrypt } from "@/lib/crypto";
 import { formatCurrency } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
@@ -146,6 +147,12 @@ export default async function GridPage({
       const ssnPlain = safeDecrypt(e.ssn);
       const ssnDigits = ssnPlain ? ssnPlain.replace(/\D/g, "") : "";
       const ssnToken = ssnDigits ? `${ssnDigits} ${ssnDigits.slice(-4)}` : null;
+      // Driver's license is also encrypted at rest — decrypt it in SERVER
+      // scope only to build the search term so a search still matches the
+      // plaintext (mirrors the SSN decrypt-then-match above). The decrypted
+      // value is never written back onto the row handed to client cells;
+      // safeDecrypt returns null for legacy/corrupt rows (no throw).
+      const dlPlain = safeDecrypt(e.driversLicenseNumber);
       const haystack = [
         e.firstName,
         e.lastName,
@@ -157,7 +164,7 @@ export default async function GridPage({
         e.city,
         e.state,
         e.zip,
-        e.driversLicenseNumber,
+        dlPlain,
         e.site,
         ...e.certifications.map((c) => c.name),
       ]
@@ -228,18 +235,334 @@ export default async function GridPage({
   const th =
     "sticky top-0 z-10 border border-white/10 bg-slate-900 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 whitespace-nowrap shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
   const td = "border border-white/10 px-2 py-1.5 align-top text-slate-200";
-  // The Employee column stays pinned on the left while scrolling sideways.
-  // Pinned cells need an opaque background (the inset shadow re-applies the
-  // approved-row tint) and their own right edge, since collapsed borders
-  // scroll away with the table.
-  // (Class names are spelled out in full so Tailwind picks them up.)
-  const nameTh = `${th} left-0 z-20 shadow-[inset_0_-1px_0_rgba(255,255,255,0.15),1px_0_0_rgba(255,255,255,0.2)]`;
-  const nameTd = (approved: boolean) =>
-    `${td} sticky left-0 z-[5] whitespace-nowrap bg-slate-900 font-medium ${
-      approved
-        ? "shadow-[inset_0_0_0_9999px_rgba(16,185,129,0.1),1px_0_0_rgba(255,255,255,0.2)]"
-        : "shadow-[1px_0_0_rgba(255,255,255,0.2)]"
-    }`;
+  // Frozen first (Employee) column. The body cell needs an OPAQUE background so
+  // horizontally-scrolled cells don't bleed through, and explicit z-index so it
+  // sits above the scrolling body but below the sticky header. z-layering:
+  //   header corner (top-left)  z-30  — highest, pinned on both axes
+  //   sticky header row          z-20  (thead is sticky via `sticky top-0`)
+  //   frozen body cell           z-10  — above scrolling body, below header
+  // The right-edge shadow signals the freeze on horizontal scroll.
+  const freezeShadow = "shadow-[2px_0_6px_-2px_rgba(0,0,0,0.6)]";
+  const thFrozen = `${th} sticky left-0 z-30 bg-slate-900/95 ${freezeShadow}`;
+  const tdFrozenBase = `${td} sticky left-0 z-10 ${freezeShadow}`;
+
+  // Build every visible cell for one employee row ONCE so the wide table and
+  // the stacked mobile card consume identical content (same cell components,
+  // same field/label/canReveal, same computed strings). Only the surrounding
+  // markup differs between the two views, so no business logic is duplicated.
+  // The returned nodes never carry ciphertext — only server-computed strings.
+  type RowCell = { key: string; label: string; node: React.ReactNode };
+  function buildRow(e: (typeof employees)[number]) {
+    const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)";
+    const address = [e.addressLine1, e.addressLine2, e.city, e.state, e.zip].filter(Boolean).join(", ");
+    const certNames = e.certifications.map((c) => c.name).join(", ");
+    const isDuplicate = duplicateIds.has(e.id);
+
+    // Employee identity cell (also the card header). Rendered once, reused.
+    const nameNode = (
+      <>
+        {editable("name") ? (
+          <NameCell
+            id={e.id}
+            firstName={e.firstName}
+            lastName={e.lastName}
+            canOpenLibrary={canOpenDetailsFor(e)}
+          />
+        ) : canOpenDetailsFor(e) ? (
+          <Link href={`/admin/employee/${e.id}`} className="text-cyan-400 hover:underline">
+            {name}
+          </Link>
+        ) : (
+          <span>{name}</span>
+        )}
+        {isDuplicate && (
+          <span
+            title="Another employee shares this name or email — possible duplicate onboarding."
+            className="ml-1 inline-block rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
+          >
+            Duplicate
+          </span>
+        )}
+        {canLibrary && e.documents.length > 0 && (
+          <PinUnlockLink
+            href={`/api/documents-export/${e.id}`}
+            scope="export"
+            title={`Download ${name}'s documents`}
+            className="ml-1 text-xs font-normal text-slate-500 hover:text-cyan-400"
+          >
+            ⬇
+          </PinUnlockLink>
+        )}
+      </>
+    );
+
+    const activeNode = editable("active") ? (
+      <PinConfirmButton
+        action={setActive}
+        fields={{ employeeId: e.id, active: (!e.active).toString() }}
+        confirmMessage={e.active ? "Deactivate this employee?" : "Activate this employee?"}
+        className={
+          e.active
+            ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+            : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
+        }
+      >
+        {e.active ? "Active" : "Inactive"}
+      </PinConfirmButton>
+    ) : (
+      <span
+        className={
+          e.active
+            ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300"
+            : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300"
+        }
+      >
+        {e.active ? "Active" : "Inactive"}
+      </span>
+    );
+
+    const cells: RowCell[] = [];
+    const push = (key: string, label: string, node: React.ReactNode) => {
+      if (show(key)) cells.push({ key, label, node });
+    };
+
+    push("site", "Site", editable("site") ? <SiteCell id={e.id} site={e.site} /> : <span>{e.site || "—"}</span>);
+    push("active", "Status", activeNode);
+    push(
+      "address",
+      "Address",
+      editable("address") ? (
+        // AddressCell no longer edits line 2 (master dropped it from Addr);
+        // the stored value is preserved server-side when the form omits it.
+        <AddressCell
+          id={e.id}
+          addr={{
+            addressLine1: e.addressLine1,
+            city: e.city,
+            state: e.state,
+            zip: e.zip,
+          }}
+        />
+      ) : (
+        address || "—"
+      ),
+    );
+    push(
+      "email",
+      "Email",
+      editable("email") ? (
+        <EditableCell id={e.id} column="email" value={e.email} type="email" width="w-44" />
+      ) : e.email ? (
+        <a href={`mailto:${e.email}`} className="text-cyan-400 hover:underline">
+          {e.email}
+        </a>
+      ) : (
+        "—"
+      ),
+    );
+    push(
+      "phone",
+      "Phone",
+      editable("phone") ? <EditableCell id={e.id} column="phone" value={e.phone} type="tel" width="w-28" /> : e.phone || "—",
+    );
+    push(
+      "ssn",
+      "SS#",
+      editable("ssn") ? (
+        <SecretEditCell employeeId={e.id} maskedValue={maskSsn(safeDecrypt(e.ssn))} field="ssn" label="SSN" canReveal={show("ssn")} />
+      ) : (
+        <SecretField maskedValue={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} field="ssn" label="SSN" canReveal={show("ssn")} />
+      ),
+    );
+    push(
+      "driverLicense",
+      "Driver License",
+      <>
+        {editable("driverLicense") ? (
+          <SecretEditCell
+            employeeId={e.id}
+            maskedValue={maskLast4(safeDecrypt(e.driversLicenseNumber))}
+            field="driversLicense"
+            label="Driver's license"
+            canReveal={show("driverLicense")}
+          />
+        ) : (
+          <SecretField
+            maskedValue={maskLast4(safeDecrypt(e.driversLicenseNumber))}
+            employeeId={e.id}
+            field="driversLicense"
+            label="Driver's license"
+            canReveal={show("driverLicense")}
+          />
+        )}
+        <DocLinks employeeId={e.id} docs={e.documents} category="LICENSE" canManage={canManageDocs} />
+        {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}
+      </>,
+    );
+    push(
+      "safetyExpiry",
+      "Safety Expiry",
+      <>
+        {editable("safetyExpiry") ? (
+          <EditableCell id={e.id} column="safetyExpiry" value={dateInputValue(e.safetyCouncilExpiry)} type="date" width="w-36" />
+        ) : (
+          <div>{fmtDate(e.safetyCouncilExpiry)}</div>
+        )}
+        <DocLinks employeeId={e.id} docs={e.documents} category="SAFETY_COUNCIL" canManage={canManageDocs} />
+        {editable("safetyExpiry") && <UploadCell id={e.id} column="safetyExpiry" />}
+      </>,
+    );
+    push(
+      "twicExpiry",
+      "TWIC Expiry",
+      <>
+        {editable("twicExpiry") ? (
+          <EditableCell id={e.id} column="twicExpiry" value={dateInputValue(e.twicExpiry)} type="date" width="w-36" />
+        ) : (
+          <div>{fmtDate(e.twicExpiry)}</div>
+        )}
+        <DocLinks employeeId={e.id} docs={e.documents} category="TWIC" canManage={canManageDocs} />
+        {editable("twicExpiry") && <UploadCell id={e.id} column="twicExpiry" />}
+      </>,
+    );
+    push(
+      "certification",
+      "Certification",
+      <>
+        <div className="text-xs text-slate-400">{certNames}</div>
+        <DocLinks employeeId={e.id} docs={e.documents} category="CERTIFICATION" canManage={canManageDocs} />
+        {editable("certification") && <UploadCell id={e.id} column="certification" certNames={e.certifications.map((c) => c.name)} />}
+      </>,
+    );
+    push(
+      "utilityBill",
+      "Utility Bill",
+      <>
+        <DocLinks employeeId={e.id} docs={e.documents} category="UTILITY_BILL" canManage={canManageDocs} />
+        {editable("utilityBill") && <UploadCell id={e.id} column="utilityBill" />}
+      </>,
+    );
+    push(
+      "payRate",
+      "Pay Rate",
+      editable("payRate") ? <RateCell id={e.id} field="payRate" value={e.payRate} /> : <span>{formatCurrency(e.payRate)}</span>,
+    );
+    push(
+      "billRate",
+      "Bill Rate",
+      editable("billRate") ? <RateCell id={e.id} field="billRate" value={e.billRate} /> : <span>{formatCurrency(e.billRate)}</span>,
+    );
+    push(
+      "hireDate",
+      "Hire Date",
+      editable("hireDate") ? (
+        <EditableCell id={e.id} column="hireDate" value={dateInputValue(e.hireDate)} type="date" width="w-36" />
+      ) : (
+        <span>{fmtDate(e.hireDate)}</span>
+      ),
+    );
+    push(
+      "frc",
+      "FRC",
+      editable("frc") ? (
+        <FrcCell id={e.id} needed={e.frcNeeded} size={e.frcSize} />
+      ) : (
+        <span>
+          {e.frcNeeded == null ? "—" : e.frcNeeded ? `Yes${e.frcSize ? ` · ${e.frcSize}` : ""}` : "No"}
+        </span>
+      ),
+    );
+    push(
+      "creditCard",
+      "Credit Card",
+      editable("creditCard") ? <FlagCell id={e.id} column="creditCard" value={e.creditCardApproved} /> : <span>{yesNo(e.creditCardApproved)}</span>,
+    );
+    push(
+      "emailNeeded",
+      "Email Needed",
+      editable("emailNeeded") ? <FlagCell id={e.id} column="emailNeeded" value={e.emailNeeded} /> : <span>{yesNo(e.emailNeeded)}</span>,
+    );
+    push("benefits", "Benefits", <span>{yesNo(hasBenefits(e.employmentType))}</span>);
+    push(
+      "hrReviewed",
+      "HR Reviewed",
+      approvable("hrReviewed") ? (
+        <form action={setHrReviewed}>
+          <input type="hidden" name="employeeId" value={e.id} />
+          <input type="hidden" name="hrReviewed" value={(!e.hrReviewed).toString()} />
+          <button
+            type="submit"
+            className={
+              e.hrReviewed
+                ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
+                : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+            }
+          >
+            {e.hrReviewed ? "Reviewed ✓" : "Mark reviewed"}
+          </button>
+        </form>
+      ) : (
+        <span
+          className={
+            e.hrReviewed
+              ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
+              : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
+          }
+        >
+          {e.hrReviewed ? "Reviewed ✓" : "Pending"}
+        </span>
+      ),
+    );
+    push(
+      "approved",
+      "Approved",
+      approvable("approved") ? (
+        <form action={setApproved}>
+          <input type="hidden" name="employeeId" value={e.id} />
+          <input type="hidden" name="approved" value={(!e.approved).toString()} />
+          <button
+            type="submit"
+            className={
+              e.approved
+                ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
+                : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+            }
+          >
+            {e.approved ? "Approved ✓" : "Approve"}
+          </button>
+        </form>
+      ) : (
+        <StatusPill
+          label={e.approved ? "Approved ✓" : "Pending"}
+          tone={e.approved ? "active" : "inactive"}
+        />
+      ),
+    );
+    push(
+      "archived",
+      "Archived",
+      editable("archived") ? (
+        <PinConfirmButton
+          action={setArchived}
+          fields={{ employeeId: e.id, archived: (!e.archived).toString() }}
+          confirmMessage={e.archived ? "Unarchive this employee?" : "Archive this employee?"}
+          className={
+            e.archived
+              ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
+              : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+          }
+        >
+          {e.archived ? "Unarchive" : "Archive"}
+        </PinConfirmButton>
+      ) : (
+        <span className={e.archived ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300" : "text-slate-500"}>
+          {e.archived ? "Archived" : "—"}
+        </span>
+      ),
+    );
+
+    return { nameNode, cells, isDuplicate, name };
+  }
 
   return (
     <main className="min-h-screen py-8">
@@ -275,14 +598,14 @@ export default async function GridPage({
           archivedCount={all.filter((e) => e.archived).length}
         />
 
-        {/* Scrolls inside its own box (both directions) so the header row and
-            the horizontal scrollbar stay on screen however long the list is. */}
-        <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+        {/* Wide table: shown md and up. The Employee column is frozen on
+            horizontal scroll and the header stays sticky on vertical scroll. */}
+        <div className="hidden max-h-[75vh] overflow-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur md:block">
           <table className="w-full border-collapse text-sm">
-            <thead>
+            <thead className="sticky top-0 z-20 bg-slate-900/95">
               <tr>
                 {show("name") && (
-                  <th className={nameTh}>
+                  <th className={thFrozen}>
                     <Link
                       href={nameSortHref}
                       title={sortByName && nameDir === "asc" ? "Sort Z to A" : "Sort A to Z"}
@@ -327,368 +650,61 @@ export default async function GridPage({
                 </tr>
               )}
               {employees.map((e) => {
-                const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || "(unnamed)";
-                const address = [e.addressLine1, e.city, e.state, e.zip]
-                  .filter(Boolean)
-                  .join(", ");
-                const certNames = e.certifications.map((c) => c.name).join(", ");
+                const { nameNode, cells } = buildRow(e);
+                // The frozen body cell carries an OPAQUE background so scrolled
+                // content can't bleed through; the approved-row highlight that
+                // the <tr>'s bg-emerald-500/10 would normally show is instead
+                // rendered on this opaque cell via an inset ring token (FEAT-003).
+                const frozenBg = e.approved ? "bg-slate-900 ring-inset ring-1 ring-emerald-500/30" : "bg-slate-900";
                 return (
                   <tr key={e.id} className={e.approved ? "bg-emerald-500/10" : ""}>
                     {show("name") && (
-                      <td className={nameTd(e.approved)}>
-                        {editable("name") ? (
-                          <NameCell
-                            id={e.id}
-                            firstName={e.firstName}
-                            lastName={e.lastName}
-                            canOpenLibrary={canOpenDetailsFor(e)}
-                          />
-                        ) : canOpenDetailsFor(e) ? (
-                          <Link href={`/admin/employee/${e.id}`} className="text-cyan-400 hover:underline">
-                            {name}
-                          </Link>
-                        ) : (
-                          <span>{name}</span>
-                        )}
-                        {duplicateIds.has(e.id) && (
-                          <span
-                            title="Another employee shares this name or email — possible duplicate onboarding."
-                            className="ml-1 inline-block rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
-                          >
-                            Duplicate
-                          </span>
-                        )}
-                        {canLibrary && e.documents.length > 0 && (
-                          <PinUnlockLink
-                            href={`/api/documents-export/${e.id}`}
-                            scope="export"
-                            title={`Download ${name}'s documents`}
-                            className="ml-1 text-xs font-normal text-slate-500 hover:text-cyan-400"
-                          >
-                            ⬇
-                          </PinUnlockLink>
-                        )}
-                      </td>
+                      <td className={`${tdFrozenBase} ${frozenBg} whitespace-nowrap font-medium`}>{nameNode}</td>
                     )}
-                    {show("site") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("site") ? (
-                          <SiteCell id={e.id} site={e.site} />
-                        ) : (
-                          <span>{e.site || "—"}</span>
-                        )}
+                    {cells.map((c) => (
+                      <td key={c.key} className={td}>
+                        {c.node}
                       </td>
-                    )}
-                    {show("active") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        {editable("active") ? (
-                          <PinConfirmButton
-                            action={setActive}
-                            fields={{ employeeId: e.id, active: (!e.active).toString() }}
-                            confirmMessage={e.active ? "Deactivate this employee?" : "Activate this employee?"}
-                            className={
-                              e.active
-                                ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-                                : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
-                            }
-                          >
-                            {e.active ? "Active" : "Inactive"}
-                          </PinConfirmButton>
-                        ) : (
-                          <span
-                            className={
-                              e.active
-                                ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300"
-                                : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300"
-                            }
-                          >
-                            {e.active ? "Active" : "Inactive"}
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {show("address") && (
-                      <td className={td}>
-                        {editable("address") ? (
-                          <AddressCell
-                            id={e.id}
-                            addr={{
-                              addressLine1: e.addressLine1,
-                              city: e.city,
-                              state: e.state,
-                              zip: e.zip,
-                            }}
-                          />
-                        ) : (
-                          address || "—"
-                        )}
-                      </td>
-                    )}
-                    {show("email") && (
-                      <td className={td}>
-                        {editable("email") ? (
-                          <EditableCell id={e.id} column="email" value={e.email} type="email" width="w-44" />
-                        ) : e.email ? (
-                          <a href={`mailto:${e.email}`} className="text-cyan-400 hover:underline">
-                            {e.email}
-                          </a>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    )}
-                    {show("phone") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("phone") ? (
-                          <EditableCell id={e.id} column="phone" value={e.phone} type="tel" width="w-28" />
-                        ) : (
-                          e.phone || "—"
-                        )}
-                      </td>
-                    )}
-                    {show("ssn") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("ssn") ? (
-                          <SsnEditCell employeeId={e.id} ssnMasked={maskSsn(safeDecrypt(e.ssn))} />
-                        ) : (
-                          <SsnField maskedSsn={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} />
-                        )}
-                      </td>
-                    )}
-                    {show("driverLicense") && (
-                      <td className={td}>
-                        {editable("driverLicense") ? (
-                          <EditableCell
-                            id={e.id}
-                            column="driverLicense"
-                            value={e.driversLicenseNumber}
-                            width="w-28"
-                          />
-                        ) : (
-                          <div className="text-xs text-slate-400">{e.driversLicenseNumber || ""}</div>
-                        )}
-                        <DocLinks employeeId={e.id} docs={e.documents} category="LICENSE" canManage={canManageDocs} />
-                        {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}
-                      </td>
-                    )}
-                    {show("safetyExpiry") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("safetyExpiry") ? (
-                          <EditableCell
-                            id={e.id}
-                            column="safetyExpiry"
-                            value={dateInputValue(e.safetyCouncilExpiry)}
-                            type="date"
-                            width="w-36"
-                          />
-                        ) : (
-                          <div>{fmtDate(e.safetyCouncilExpiry)}</div>
-                        )}
-                        <DocLinks employeeId={e.id} docs={e.documents} category="SAFETY_COUNCIL" canManage={canManageDocs} />
-                        {editable("safetyExpiry") && <UploadCell id={e.id} column="safetyExpiry" />}
-                      </td>
-                    )}
-                    {show("twicExpiry") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("twicExpiry") ? (
-                          <EditableCell
-                            id={e.id}
-                            column="twicExpiry"
-                            value={dateInputValue(e.twicExpiry)}
-                            type="date"
-                            width="w-36"
-                          />
-                        ) : (
-                          <div>{fmtDate(e.twicExpiry)}</div>
-                        )}
-                        <DocLinks employeeId={e.id} docs={e.documents} category="TWIC" canManage={canManageDocs} />
-                        {editable("twicExpiry") && <UploadCell id={e.id} column="twicExpiry" />}
-                      </td>
-                    )}
-                    {show("certification") && (
-                      <td className={td}>
-                        <div className="text-xs text-slate-400">{certNames}</div>
-                        <DocLinks employeeId={e.id} docs={e.documents} category="CERTIFICATION" canManage={canManageDocs} />
-                        {editable("certification") && (
-                          <UploadCell
-                            id={e.id}
-                            column="certification"
-                            certNames={e.certifications.map((c) => c.name)}
-                          />
-                        )}
-                      </td>
-                    )}
-                    {show("utilityBill") && (
-                      <td className={td}>
-                        <DocLinks employeeId={e.id} docs={e.documents} category="UTILITY_BILL" canManage={canManageDocs} />
-                        {editable("utilityBill") && <UploadCell id={e.id} column="utilityBill" />}
-                      </td>
-                    )}
-                    {show("payRate") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("payRate") ? (
-                          <RateCell id={e.id} field="payRate" value={e.payRate} />
-                        ) : (
-                          <span>{formatCurrency(e.payRate)}</span>
-                        )}
-                      </td>
-                    )}
-                    {show("billRate") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("billRate") ? (
-                          <RateCell id={e.id} field="billRate" value={e.billRate} />
-                        ) : (
-                          <span>{formatCurrency(e.billRate)}</span>
-                        )}
-                      </td>
-                    )}
-                    {show("hireDate") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("hireDate") ? (
-                          <EditableCell
-                            id={e.id}
-                            column="hireDate"
-                            value={dateInputValue(e.hireDate)}
-                            type="date"
-                            width="w-36"
-                          />
-                        ) : (
-                          <span>{fmtDate(e.hireDate)}</span>
-                        )}
-                      </td>
-                    )}
-                    {show("frc") && (
-                      <td className={`${td} whitespace-nowrap`}>
-                        {editable("frc") ? (
-                          <FrcCell id={e.id} needed={e.frcNeeded} size={e.frcSize} />
-                        ) : (
-                          <span>
-                            {e.frcNeeded == null
-                              ? "—"
-                              : e.frcNeeded
-                                ? `Yes${e.frcSize ? ` · ${e.frcSize}` : ""}`
-                                : "No"}
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {show("creditCard") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        {editable("creditCard") ? (
-                          <FlagCell id={e.id} column="creditCard" value={e.creditCardApproved} />
-                        ) : (
-                          <span>{yesNo(e.creditCardApproved)}</span>
-                        )}
-                      </td>
-                    )}
-                    {show("emailNeeded") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        {editable("emailNeeded") ? (
-                          <FlagCell id={e.id} column="emailNeeded" value={e.emailNeeded} />
-                        ) : (
-                          <span>{yesNo(e.emailNeeded)}</span>
-                        )}
-                      </td>
-                    )}
-                    {show("benefits") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        <span>{yesNo(hasBenefits(e.employmentType))}</span>
-                      </td>
-                    )}
-                    {show("hrReviewed") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        {approvable("hrReviewed") ? (
-                          <form action={setHrReviewed}>
-                            <input type="hidden" name="employeeId" value={e.id} />
-                            <input type="hidden" name="hrReviewed" value={(!e.hrReviewed).toString()} />
-                            <button
-                              type="submit"
-                              className={
-                                e.hrReviewed
-                                  ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
-                                  : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
-                              }
-                            >
-                              {e.hrReviewed ? "Reviewed ✓" : "Mark reviewed"}
-                            </button>
-                          </form>
-                        ) : (
-                          <span
-                            className={
-                              e.hrReviewed
-                                ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
-                                : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
-                            }
-                          >
-                            {e.hrReviewed ? "Reviewed ✓" : "Pending"}
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {show("approved") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        {approvable("approved") ? (
-                          <form action={setApproved}>
-                            <input type="hidden" name="employeeId" value={e.id} />
-                            <input type="hidden" name="approved" value={(!e.approved).toString()} />
-                            <button
-                              type="submit"
-                              className={
-                                e.approved
-                                  ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
-                                  : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
-                              }
-                            >
-                              {e.approved ? "Approved ✓" : "Approve"}
-                            </button>
-                          </form>
-                        ) : (
-                          <span
-                            className={
-                              e.approved
-                                ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
-                                : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
-                            }
-                          >
-                            {e.approved ? "Approved ✓" : "Pending"}
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {show("archived") && (
-                      <td className={`${td} whitespace-nowrap text-center`}>
-                        {editable("archived") ? (
-                          <PinConfirmButton
-                            action={setArchived}
-                            fields={{ employeeId: e.id, archived: (!e.archived).toString() }}
-                            confirmMessage={e.archived ? "Unarchive this employee?" : "Archive this employee?"}
-                            className={
-                              e.archived
-                                ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
-                                : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
-                            }
-                          >
-                            {e.archived ? "Unarchive" : "Archive"}
-                          </PinConfirmButton>
-                        ) : (
-                          <span
-                            className={
-                              e.archived
-                                ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300"
-                                : "text-slate-500"
-                            }
-                          >
-                            {e.archived ? "Archived" : "—"}
-                          </span>
-                        )}
-                      </td>
-                    )}
+                    ))}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+
+        {/* Stacked card view: shown below md to avoid heavy left-right
+            scrolling. Reuses the SAME server data and the SAME cell components
+            (SecretField/SecretEditCell etc.) as the table — see buildRow. */}
+        <div className="space-y-3 md:hidden">
+          {employees.length === 0 && (
+            <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4 text-center text-slate-500">
+              {all.length === 0 ? "No employees yet." : "No employees match your search/filter."}
+            </div>
+          )}
+          {employees.map((e) => {
+            const { nameNode, cells } = buildRow(e);
+            return (
+              <div
+                key={e.id}
+                className={`rounded-lg border bg-slate-900/60 p-4 shadow-lg shadow-black/30 backdrop-blur ${
+                  e.approved ? "border-emerald-500/30 ring-inset ring-1 ring-emerald-500/20" : "border-white/10"
+                }`}
+              >
+                <div className="mb-3 border-b border-white/10 pb-2 font-medium text-white">{nameNode}</div>
+                <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+                  {cells.map((c) => (
+                    <div key={c.key} className="contents">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.label}</dt>
+                      <dd className="min-w-0 text-slate-200">{c.node}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            );
+          })}
+        </div>
+
       </div>
     </main>
   );

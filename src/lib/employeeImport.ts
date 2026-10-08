@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { Readable } from "stream";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { encSsn } from "./crypto";
+import { encSsn, encField } from "./crypto";
 
 export const MAX_IMPORT_ROWS = 500;
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -230,7 +230,14 @@ export async function parseImportFile(
       billRate: bill.value,
       projectLeadEmail: parseEmail(raw.projectLeadEmail ?? null, "Project Lead Email", errors),
       projectManagerEmail: parseEmail(raw.projectManagerEmail ?? null, "Project Manager Email", errors),
-      driversLicenseNumber: str(raw.driversLicenseNumber ?? null),
+      // Encrypt the secret ID at this single parse-time point. This record
+      // feeds BOTH write paths in applyImport — createMany for new rows and
+      // employee.update for matched rows (toUpdate copies record values into
+      // its data) — so the ciphertext is what reaches the DB in either case;
+      // no raw plaintext ID is ever persisted. encField/encSsn are idempotent.
+      // (safetyCouncilId/twicNumber are not import columns — only their
+      // expiry DATE fields are, and those stay plaintext.)
+      driversLicenseNumber: encField(str(raw.driversLicenseNumber ?? null)),
       ssn: encSsn(str(raw.ssn ?? null)),
       safetyCouncilExpiry: safety.value,
       twicExpiry: twic.value,

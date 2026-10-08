@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { login } from "./actions";
+import { inputClass, labelClass, errorBoxClass } from "@/lib/ui";
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, undefined);
@@ -31,16 +32,16 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <label className="mt-7 block text-sm font-medium text-slate-300">Email</label>
+        <label className={`mt-7 ${labelClass}`}>Email</label>
         <input
           name="email"
           type="email"
           autoComplete="username"
-          className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 transition-colors focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+          className={inputClass}
         />
 
         <div className="mt-4 flex items-center justify-between">
-          <label className="block text-sm font-medium text-slate-300">Password</label>
+          <label className={labelClass}>Password</label>
           <Link href="/forgot-password" className="text-xs text-cyan-400 hover:text-cyan-300">
             Forgot password?
           </Link>
@@ -49,14 +50,10 @@ export default function LoginPage() {
           name="password"
           type="password"
           autoComplete="current-password"
-          className="mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 transition-colors focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+          className={inputClass}
         />
 
-        {state?.ok === false && (
-          <p className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 p-2 text-sm text-rose-300">
-            {state.error}
-          </p>
-        )}
+        {state?.ok === false && <p className={`mt-3 ${errorBoxClass}`}>{state.error}</p>}
 
         <button
           type="submit"

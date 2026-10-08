@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { saveFile } from "@/lib/storage";
 import { sendEmail, emailButton } from "@/lib/email";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
-import { encSsn } from "@/lib/crypto";
+import { encSsn, encField } from "@/lib/crypto";
 import { revalidatePath } from "next/cache";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
@@ -94,10 +94,10 @@ export async function submitOnboarding(
       city: str(form, "city"),
       state: str(form, "state"),
       zip: str(form, "zip"),
-      driversLicenseNumber: str(form, "driversLicenseNumber"),
-      safetyCouncilId: str(form, "safetyCouncilId"),
+      driversLicenseNumber: encField(str(form, "driversLicenseNumber")),
+      safetyCouncilId: encField(str(form, "safetyCouncilId")),
       safetyCouncilExpiry: dateOrNull(form, "safetyCouncilExpiry"),
-      twicNumber: str(form, "twicNumber"),
+      twicNumber: encField(str(form, "twicNumber")),
       twicExpiry: dateOrNull(form, "twicExpiry"),
       status: "SUBMITTED",
     },
@@ -222,10 +222,10 @@ export async function saveOnboardingDraft(
       city: str(form, "city"),
       state: str(form, "state"),
       zip: str(form, "zip"),
-      driversLicenseNumber: str(form, "driversLicenseNumber"),
-      safetyCouncilId: str(form, "safetyCouncilId"),
+      driversLicenseNumber: encField(str(form, "driversLicenseNumber")),
+      safetyCouncilId: encField(str(form, "safetyCouncilId")),
       safetyCouncilExpiry: dateOrNull(form, "safetyCouncilExpiry"),
-      twicNumber: str(form, "twicNumber"),
+      twicNumber: encField(str(form, "twicNumber")),
       twicExpiry: dateOrNull(form, "twicExpiry"),
     },
   });

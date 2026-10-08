@@ -3,6 +3,7 @@
 import { getCurrentUser, requirePin } from "@/lib/auth";
 import { mintUnlock, type UnlockScope } from "@/lib/pinGate";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { decryptSecret } from "@/lib/crypto";
 import {
   getAccessMap,
@@ -29,40 +30,71 @@ export async function verifyPinForUnlock(
   return { ok: true };
 }
 
-// Reveal a single employee's full SSN after a correct PIN. The authorization
-// reproduces EXACTLY the composite gate the employee detail page applies to
-// render the SSN (see design §3.4): the SSN column must be viewable for the
-// role (canView(access,"ssn")), the user must be able to open that employee's
-// full record (canFullView), and non-admins are confined to their assigned
-// sites. The PIN is strictly additive on top of these checks. The reveal
-// decrypt is HARD (not safeDecrypt) so a corrupt row never silently shows
-// plaintext, but the throw is caught and mapped to a defined union member so
-// the dialog can render it. Never logs the PIN, the SSN, or any ciphertext.
-export async function revealSsn(
-  pin: string,
-  employeeId: string,
-): Promise<
-  | { ok: true; ssn: string }
+// The secret ID fields a correct PIN can reveal. Each maps to one encrypted
+// Employee column and the rbac view-key that gates it.
+export type SecretFieldKey = "ssn" | "driversLicense" | "safetyCouncil" | "twic";
+
+type RevealResult =
+  | { ok: true; value: string }
   | {
       ok: false;
       code: "NO_USER" | "NO_PIN" | "BAD_PIN" | "FORBIDDEN" | "DECRYPT_FAILED";
       error: string;
-    }
-> {
+    };
+
+// field -> { encrypted Employee column, rbac view-key }. The view-key is the
+// same column key canView() checks when the page/grid decides whether to show
+// the masked last-4 + eye, so the reveal gate can never exceed display gating.
+const FIELD_MAP: Record<SecretFieldKey, { column: "ssn" | "driversLicenseNumber" | "safetyCouncilId" | "twicNumber"; viewKey: string }> = {
+  ssn: { column: "ssn", viewKey: "ssn" },
+  driversLicense: { column: "driversLicenseNumber", viewKey: "driverLicense" },
+  safetyCouncil: { column: "safetyCouncilId", viewKey: "safetyExpiry" },
+  twic: { column: "twicNumber", viewKey: "twicExpiry" },
+};
+
+// Reveal a single employee's full secret ID (SSN / driver's license / safety
+// council / TWIC) after a correct PIN. The authorization reproduces EXACTLY
+// the composite gate the employee detail page applies to render the field (see
+// design §3.4): the field's column must be viewable for the role
+// (canView(access, viewKey)), the user must be able to open that employee's
+// full record (canFullView), and non-admins are confined to their assigned
+// sites. The PIN is strictly additive on top of these checks. The reveal
+// decrypt is HARD (not safeDecrypt) so a corrupt row never silently shows
+// plaintext, but the throw is caught and mapped to a defined union member so
+// the dialog can render it. Never logs the PIN, the value, or any ciphertext.
+export async function revealField(
+  pin: string,
+  employeeId: string,
+  field: SecretFieldKey,
+): Promise<RevealResult> {
   const r = await requirePin(pin);
   if (!r.ok) return r; // NO_USER | NO_PIN | BAD_PIN
 
   const me = await getCurrentUser();
   if (!me) return { ok: false, code: "NO_USER", error: "Not signed in." };
 
-  const access = await getAccessMap(me.role);
-  // (1) SSN column must be viewable for this role.
-  if (!canView(access, "ssn")) return { ok: false, code: "FORBIDDEN", error: "Not available." };
+  const { column, viewKey } = FIELD_MAP[field];
 
-  const e = await prisma.employee.findUnique({
-    where: { id: employeeId },
-    select: { ssn: true, site: true, projectLeadEmail: true, projectManagerEmail: true, createdById: true },
-  });
+  const access = await getAccessMap(me.role);
+  // (1) The field's column must be viewable for this role.
+  if (!canView(access, viewKey)) return { ok: false, code: "FORBIDDEN", error: "Not available." };
+
+  // FIX2: a `satisfies Prisma.EmployeeSelect` object (NOT a computed-key
+  // `{ [column]: true } as const`, which does not type-check) selecting every
+  // secret column plus the row-scope fields with literal keys, so the result
+  // type stays narrowed; the value is then read via a direct e[column] access.
+  const select = {
+    ssn: true,
+    driversLicenseNumber: true,
+    safetyCouncilId: true,
+    twicNumber: true,
+    site: true,
+    projectLeadEmail: true,
+    projectManagerEmail: true,
+    createdById: true,
+  } satisfies Prisma.EmployeeSelect;
+
+  const e = await prisma.employee.findUnique({ where: { id: employeeId }, select });
   if (!e) return { ok: false, code: "FORBIDDEN", error: "Not available." }; // no existence leak
 
   // (2) The SAME row-scope the detail page applies.
@@ -78,12 +110,31 @@ export async function revealSsn(
       return { ok: false, code: "FORBIDDEN", error: "Not available." };
   }
 
+  const stored = e[column];
   try {
-    const ssn = e.ssn ? decryptSecret(e.ssn) : "";
-    return { ok: true, ssn };
+    const value = stored ? decryptSecret(stored) : "";
+    return { ok: true, value };
   } catch {
-    // Log the row id ONLY -- never the stored value or any fragment of it.
-    console.error(`revealSsn: SSN decrypt failed for employee ${employeeId}`);
-    return { ok: false, code: "DECRYPT_FAILED", error: "This SSN could not be read." };
+    // Log the row id + field ONLY -- never the stored value or any fragment.
+    console.error(`revealField: ${field} decrypt failed for employee ${employeeId}`);
+    return { ok: false, code: "DECRYPT_FAILED", error: "This value could not be read." };
   }
+}
+
+// SSN reveal: thin wrapper over revealField so existing callers keep the
+// {ok:true; ssn} shape (value -> ssn).
+export async function revealSsn(
+  pin: string,
+  employeeId: string,
+): Promise<
+  | { ok: true; ssn: string }
+  | {
+      ok: false;
+      code: "NO_USER" | "NO_PIN" | "BAD_PIN" | "FORBIDDEN" | "DECRYPT_FAILED";
+      error: string;
+    }
+> {
+  const res = await revealField(pin, employeeId, "ssn");
+  if (res.ok) return { ok: true, ssn: res.value };
+  return res;
 }

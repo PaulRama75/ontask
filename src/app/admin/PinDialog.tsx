@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { primaryButtonClass, secondaryButtonClass, errorBoxClass } from "@/lib/ui";
 
 export type PinConfirmResult = {
   ok: boolean;
@@ -9,12 +10,11 @@ export type PinConfirmResult = {
   pinRequired?: boolean;
 };
 
+// Large, centered, letter-spaced PIN entry per the mockup.
 const inputClass =
-  "mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm tracking-[0.4em] text-white placeholder:text-slate-500 transition-colors focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400";
-const confirmButtonClass =
-  "rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-transform hover:scale-[1.02] disabled:scale-100 disabled:opacity-60";
-const cancelButtonClass =
-  "rounded-md border border-white/10 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5";
+  "mt-1 w-full rounded-lg border border-white/10 bg-slate-800/60 px-3 py-3 text-center text-lg tracking-[0.6em] text-white placeholder:text-slate-500 transition-colors focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400";
+const confirmButtonClass = primaryButtonClass;
+const cancelButtonClass = secondaryButtonClass;
 
 // Shared modal that collects a 4-6 digit security PIN and hands it to the
 // caller's onConfirm. The caller returns a result; when the result reports
@@ -85,9 +85,29 @@ export default function PinDialog({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl shadow-black/50">
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
-        {description && <p className="mt-1 text-sm text-slate-400">{description}</p>}
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl shadow-black/50">
+        <div className="flex flex-col items-center text-center">
+          <span
+            aria-hidden="true"
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-lg shadow-cyan-500/20"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-6 w-6"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </span>
+          <h2 className="mt-3 text-lg font-semibold text-white">{title}</h2>
+          {description && <p className="mt-1 text-sm text-slate-400">{description}</p>}
+        </div>
 
         {needsSetup ? (
           <div className="mt-4">
@@ -104,8 +124,8 @@ export default function PinDialog({
             </div>
           </div>
         ) : (
-          <form onSubmit={submit} className="mt-4">
-            <label className="block text-sm font-medium text-slate-300">PIN</label>
+          <form onSubmit={submit} className="mt-5">
+            <label className="block text-center text-sm font-medium text-slate-300">PIN</label>
             <input
               ref={inputRef}
               value={pin}
@@ -117,11 +137,7 @@ export default function PinDialog({
               className={inputClass}
             />
 
-            {error && (
-              <p className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 p-2 text-sm text-rose-300">
-                {error}
-              </p>
-            )}
+            {error && <p className={`mt-3 ${errorBoxClass}`}>{error}</p>}
 
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={onCancel} className={cancelButtonClass}>
