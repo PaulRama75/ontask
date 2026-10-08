@@ -188,6 +188,18 @@ export default async function GridPage({
   const th =
     "sticky top-0 z-10 border border-white/10 bg-slate-900 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 whitespace-nowrap shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
   const td = "border border-white/10 px-2 py-1.5 align-top text-slate-200";
+  // The Employee column stays pinned on the left while scrolling sideways.
+  // Pinned cells need an opaque background (the inset shadow re-applies the
+  // approved-row tint) and their own right edge, since collapsed borders
+  // scroll away with the table.
+  // (Class names are spelled out in full so Tailwind picks them up.)
+  const nameTh = `${th} left-0 z-20 shadow-[inset_0_-1px_0_rgba(255,255,255,0.15),1px_0_0_rgba(255,255,255,0.2)]`;
+  const nameTd = (approved: boolean) =>
+    `${td} sticky left-0 z-[5] whitespace-nowrap bg-slate-900 font-medium ${
+      approved
+        ? "shadow-[inset_0_0_0_9999px_rgba(16,185,129,0.1),1px_0_0_rgba(255,255,255,0.2)]"
+        : "shadow-[1px_0_0_rgba(255,255,255,0.2)]"
+    }`;
 
   return (
     <main className="min-h-screen py-8">
@@ -228,7 +240,7 @@ export default async function GridPage({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                {show("name") && <th className={th}>Employee</th>}
+                {show("name") && <th className={nameTh}>Employee</th>}
                 {show("site") && <th className={th}>Site</th>}
                 {show("active") && <th className={th}>Status</th>}
                 {show("address") && <th className={th}>Address</th>}
@@ -269,7 +281,7 @@ export default async function GridPage({
                 return (
                   <tr key={e.id} className={e.approved ? "bg-emerald-500/10" : ""}>
                     {show("name") && (
-                      <td className={`${td} whitespace-nowrap font-medium`}>
+                      <td className={nameTd(e.approved)}>
                         {editable("name") ? (
                           <NameCell
                             id={e.id}
