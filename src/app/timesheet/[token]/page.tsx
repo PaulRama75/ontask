@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { weekDates, weekEndingFor, isoDate, parseIsoDate, DAY_LABELS } from "@/lib/timesheetWeek";
-import { saveTimesheet } from "./actions";
+import { saveTimesheet, emailTimesheet } from "./actions";
+
+const EMAIL_MESSAGES: Record<string, { ok: boolean; text: string }> = {
+  sent: { ok: true, text: "Emailed the Excel and PDF timesheet." },
+  invalid: { ok: false, text: "That email address doesn't look right. Please check it and try again." },
+  limit: { ok: false, text: "Too many emails sent from this link in the last hour. Please try again later." },
+  failed: { ok: false, text: "The email couldn't be sent. Please try again, or download the files instead." },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +29,11 @@ export default async function TimesheetPortalPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ week?: string; saved?: string }>;
+  searchParams: Promise<{ week?: string; saved?: string; email?: string }>;
 }) {
   const { token } = await params;
-  const { week, saved } = await searchParams;
+  const { week, saved, email } = await searchParams;
+  const emailMsg = email ? EMAIL_MESSAGES[email] : undefined;
 
   const link = await prisma.employeeTimesheetToken.findUnique({
     where: { token },
@@ -95,6 +103,17 @@ export default async function TimesheetPortalPage({
         {saved === "1" && (
           <p className="mb-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
             Saved.
+          </p>
+        )}
+        {emailMsg && (
+          <p
+            className={`mb-4 rounded-md border px-3 py-2 text-sm ${
+              emailMsg.ok
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+            }`}
+          >
+            {emailMsg.text}
           </p>
         )}
 
@@ -281,6 +300,45 @@ export default async function TimesheetPortalPage({
             Save this week
           </button>
         </form>
+
+        <section className="mt-4 rounded-lg border border-white/10 bg-slate-900/60 p-4 shadow-lg shadow-black/30 backdrop-blur">
+          <h2 className="text-sm font-semibold text-white">Download or email this week</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            {existing
+              ? "Uses the last saved version. If you changed anything above, click Save this week first."
+              : "Nothing is saved for this week yet, so the files will be blank. Fill in the timesheet and click Save this week first."}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <a
+              href={`/timesheet/${token}/export?week=${isoDate(weekEnding)}&format=xlsx`}
+              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              Download Excel
+            </a>
+            <a
+              href={`/timesheet/${token}/export?week=${isoDate(weekEnding)}&format=pdf`}
+              className="rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-500"
+            >
+              Download PDF
+            </a>
+          </div>
+          <form action={emailTimesheet} className="mt-3 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="token" value={token} />
+            <input type="hidden" name="weekEnding" value={isoDate(weekEnding)} />
+            <input
+              type="email"
+              name="to"
+              required
+              defaultValue={e.email ?? ""}
+              placeholder="Email address"
+              aria-label="Email address to send this timesheet to"
+              className="w-full max-w-xs rounded border border-white/10 bg-slate-800/60 px-2 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+            />
+            <button className="rounded-md border border-white/10 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5">
+              Email Excel + PDF
+            </button>
+          </form>
+        </section>
       </div>
     </main>
   );
