@@ -260,7 +260,7 @@ export async function importTimesheetRows(rows: ParsedTimesheetRow[]): Promise<n
       },
     });
     await prisma.timesheetDay.upsert({
-      where: { timesheetId_date: { timesheetId: ts.id, date: r.record.date } },
+      where: { timesheetId_date_line: { timesheetId: ts.id, date: r.record.date, line: 0 } },
       update: {
         jobNumber: r.record.jobNumber,
         afeNumber: r.record.afeNumber,

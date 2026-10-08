@@ -465,15 +465,18 @@ model Timesheet {
   @@unique([employeeId, weekEnding])
 }
 
-// One calendar day within a Timesheet, mirroring the template's two daily
-// grids (billable time + mileage, and expenses).
+// One line of time within a Timesheet, mirroring the template's two daily
+// grids (billable time + mileage, and expenses). A day can be split across
+// job numbers: each split is another line for the same date (line 0, 1, ...).
+// The day's expenses live on line 0.
 model TimesheetDay {
   id                 String    @id @default(cuid())
   timesheet          Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
   timesheetId        String
   date               DateTime
-  jobNumber          String? // per-day override; falls back to Timesheet.jobNumber when reporting
-  afeNumber          String?
+  line               Int       @default(0)
+  jobNumber          String? // per-line FER Job #; falls back to Timesheet.jobNumber when reporting
+  afeNumber          String? // legacy: no longer entered on the timesheet, kept for old data
   woNumber           String?
   details            String?
   stHours            Float?
@@ -494,5 +497,5 @@ model TimesheetDay {
   misc               Float?
   expenseDescription String?
 
-  @@unique([timesheetId, date])
+  @@unique([timesheetId, date, line])
 }

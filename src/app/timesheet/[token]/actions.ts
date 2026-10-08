@@ -14,6 +14,9 @@ import {
   timesheetTotals,
 } from "@/lib/timesheetExport";
 
+// Most job numbers one day can be split across.
+const MAX_LINES_PER_DAY = 6;
+
 // The link is public (no login), so cap how many emails one link can send.
 const EMAILS_PER_HOUR = 5;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -69,37 +72,63 @@ export async function saveTimesheet(form: FormData): Promise<void> {
       },
     });
 
+    // AFE # is no longer on the form; carry any old value over by date+line.
+    const previous = await tx.timesheetDay.findMany({
+      where: { timesheetId: ts.id },
+      select: { date: true, line: true, afeNumber: true },
+    });
+    const oldAfe = new Map(previous.map((p) => [`${isoDate(p.date)}|${p.line}`, p.afeNumber]));
+
+    // Each day is one or more lines (a split day has a line per job number).
+    // Rebuild the week's lines from the form; the day's expenses go on line 0.
+    const rows = [];
     for (let i = 0; i < days.length; i++) {
       const date = days[i];
-      const data = {
-        jobNumber: str(form, `jobNumber_${i}`),
-        afeNumber: str(form, `afeNumber_${i}`),
-        woNumber: str(form, `woNumber_${i}`),
-        details: str(form, `details_${i}`),
-        stHours: num(form, `stHours_${i}`),
-        otHours: num(form, `otHours_${i}`),
-        ptoHours: num(form, `ptoHours_${i}`),
-        vacationHours: num(form, `vacationHours_${i}`),
-        holidayHours: num(form, `holidayHours_${i}`),
-        perDiem: num(form, `perDiem_${i}`),
-        mileageDriven: num(form, `mileageDriven_${i}`),
-        mileageAmount: num(form, `mileageAmount_${i}`),
-        lodging: num(form, `lodging_${i}`),
-        meals: num(form, `meals_${i}`),
-        airfare: num(form, `airfare_${i}`),
-        fuel: num(form, `fuel_${i}`),
-        carRental: num(form, `carRental_${i}`),
-        gasoline: num(form, `gasoline_${i}`),
-        parking: num(form, `parking_${i}`),
-        misc: num(form, `misc_${i}`),
-        expenseDescription: str(form, `expenseDescription_${i}`),
-      };
-      await tx.timesheetDay.upsert({
-        where: { timesheetId_date: { timesheetId: ts.id, date } },
-        update: data,
-        create: { timesheetId: ts.id, date, ...data },
-      });
+      const count = Math.min(Math.max(num(form, `lineCount_${i}`) ?? 1, 1), MAX_LINES_PER_DAY);
+      let line = 0;
+      for (let k = 0; k < count; k++) {
+        const time = {
+          jobNumber: str(form, `jobNumber_${i}_${k}`),
+          woNumber: str(form, `woNumber_${i}_${k}`),
+          details: str(form, `details_${i}_${k}`),
+          stHours: num(form, `stHours_${i}_${k}`),
+          otHours: num(form, `otHours_${i}_${k}`),
+          ptoHours: num(form, `ptoHours_${i}_${k}`),
+          vacationHours: num(form, `vacationHours_${i}_${k}`),
+          holidayHours: num(form, `holidayHours_${i}_${k}`),
+          perDiem: num(form, `perDiem_${i}_${k}`),
+          mileageDriven: num(form, `mileageDriven_${i}_${k}`),
+          mileageAmount: num(form, `mileageAmount_${i}_${k}`),
+        };
+        // Drop split lines left completely empty; line 0 always exists.
+        if (k > 0 && Object.values(time).every((v) => v == null)) continue;
+        const expenses =
+          line === 0
+            ? {
+                lodging: num(form, `lodging_${i}`),
+                meals: num(form, `meals_${i}`),
+                airfare: num(form, `airfare_${i}`),
+                fuel: num(form, `fuel_${i}`),
+                carRental: num(form, `carRental_${i}`),
+                gasoline: num(form, `gasoline_${i}`),
+                parking: num(form, `parking_${i}`),
+                misc: num(form, `misc_${i}`),
+                expenseDescription: str(form, `expenseDescription_${i}`),
+              }
+            : {};
+        rows.push({
+          timesheetId: ts.id,
+          date,
+          line,
+          afeNumber: oldAfe.get(`${isoDate(date)}|${line}`) ?? null,
+          ...time,
+          ...expenses,
+        });
+        line++;
+      }
     }
+    await tx.timesheetDay.deleteMany({ where: { timesheetId: ts.id } });
+    await tx.timesheetDay.createMany({ data: rows });
   });
 
   redirect(`/timesheet/${token}?week=${isoDate(weekEnding)}&saved=1`);

@@ -66,7 +66,7 @@ export async function fetchTimesheetDays(
         include: { employee: { select: { id: true, firstName: true, lastName: true, email: true } } },
       },
     },
-    orderBy: { date: "desc" },
+    orderBy: [{ date: "desc" }, { line: "asc" }],
   });
 }
 
@@ -87,6 +87,8 @@ export type EmployeeSummary = {
 
 export function summarizeByEmployee(rows: ReportDay[]): EmployeeSummary[] {
   const map = new Map<string, EmployeeSummary>();
+  // A day split across job numbers is several rows -- count it once.
+  const seenDays = new Set<string>();
   for (const r of rows) {
     const emp = r.timesheet.employee;
     const name = [emp.firstName, emp.lastName].filter(Boolean).join(" ") || emp.email || emp.id;
@@ -104,7 +106,11 @@ export function summarizeByEmployee(rows: ReportDay[]): EmployeeSummary[] {
       mileageAmount: 0,
       expenses: 0,
     };
-    s.days += 1;
+    const dayKey = `${emp.id}|${r.date.toISOString().slice(0, 10)}`;
+    if (!seenDays.has(dayKey)) {
+      seenDays.add(dayKey);
+      s.days += 1;
+    }
     s.stHours += r.stHours ?? 0;
     s.otHours += r.otHours ?? 0;
     s.ptoHours += r.ptoHours ?? 0;

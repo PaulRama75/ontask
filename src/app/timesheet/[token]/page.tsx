@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { weekDates, weekEndingFor, isoDate, parseIsoDate, DAY_LABELS } from "@/lib/timesheetWeek";
 import { saveTimesheet, emailTimesheet } from "./actions";
+import HoursTable, { type Line } from "./HoursTable";
 
 const EMAIL_MESSAGES: Record<string, { ok: boolean; text: string }> = {
   sent: { ok: true, text: "Emailed the Excel and PDF timesheet." },
@@ -58,7 +59,29 @@ export default async function TimesheetPortalPage({
       select: { weekEnding: true },
     }),
   ]);
-  const dayByDate = new Map((existing?.days ?? []).map((d) => [isoDate(d.date), d]));
+  // A day can have several lines (split across job numbers). Expenses live on
+  // each day's first line.
+  const linesByDate = new Map<string, NonNullable<typeof existing>["days"]>();
+  for (const d of [...(existing?.days ?? [])].sort((a, b) => a.line - b.line)) {
+    const key = isoDate(d.date);
+    linesByDate.set(key, [...(linesByDate.get(key) ?? []), d]);
+  }
+  const dayByDate = new Map([...linesByDate].map(([k, lines]) => [k, lines[0]]));
+  const initialLines: Line[][] = days.map((date) =>
+    (linesByDate.get(isoDate(date)) ?? []).map((d) => ({
+      jobNumber: d.jobNumber ?? "",
+      woNumber: d.woNumber ?? "",
+      details: d.details ?? "",
+      stHours: n(d.stHours),
+      otHours: n(d.otHours),
+      ptoHours: n(d.ptoHours),
+      vacationHours: n(d.vacationHours),
+      holidayHours: n(d.holidayHours),
+      perDiem: n(d.perDiem),
+      mileageDriven: n(d.mileageDriven),
+      mileageAmount: n(d.mileageAmount),
+    })),
+  );
 
   const totals = { st: 0, ot: 0, pto: 0, vac: 0, hol: 0, perDiem: 0, miles: 0, mileageAmt: 0 };
   const expTotals = { lodging: 0, meals: 0, airfare: 0, fuel: 0, carRental: 0, gasoline: 0, parking: 0, misc: 0 };
@@ -159,60 +182,14 @@ export default async function TimesheetPortalPage({
             </label>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className={th}>Day</th>
-                  <th className={th}>Date</th>
-                  <th className={th}>AFE#</th>
-                  <th className={th}>WO#</th>
-                  <th className={th}>Details</th>
-                  <th className={th}>ST Hrs</th>
-                  <th className={th}>OT Hrs</th>
-                  <th className={th}>PTO</th>
-                  <th className={th}>Vacation</th>
-                  <th className={th}>Holiday</th>
-                  <th className={th}>Per Diem</th>
-                  <th className={th}>Miles</th>
-                  <th className={th}>Mileage $</th>
-                </tr>
-              </thead>
-              <tbody>
-                {days.map((date, i) => {
-                  const d = dayByDate.get(isoDate(date));
-                  return (
-                    <tr key={i} className="border-b border-white/5">
-                      <td className={td}>{DAY_LABELS[i]}</td>
-                      <td className={`${td} whitespace-nowrap text-slate-400`}>{isoDate(date)}</td>
-                      <td className={td}><input name={`afeNumber_${i}`} defaultValue={d?.afeNumber ?? ""} className={inputCls} /></td>
-                      <td className={td}><input name={`woNumber_${i}`} defaultValue={d?.woNumber ?? ""} className={inputCls} /></td>
-                      <td className={td}><input name={`details_${i}`} defaultValue={d?.details ?? ""} className={`${inputCls} min-w-[140px]`} /></td>
-                      <td className={td}><input type="number" step="0.25" min="0" name={`stHours_${i}`} defaultValue={n(d?.stHours)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.25" min="0" name={`otHours_${i}`} defaultValue={n(d?.otHours)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.25" min="0" name={`ptoHours_${i}`} defaultValue={n(d?.ptoHours)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.25" min="0" name={`vacationHours_${i}`} defaultValue={n(d?.vacationHours)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.25" min="0" name={`holidayHours_${i}`} defaultValue={n(d?.holidayHours)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.01" min="0" name={`perDiem_${i}`} defaultValue={n(d?.perDiem)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.1" min="0" name={`mileageDriven_${i}`} defaultValue={n(d?.mileageDriven)} className={`${inputCls} w-16`} /></td>
-                      <td className={td}><input type="number" step="0.01" min="0" name={`mileageAmount_${i}`} defaultValue={n(d?.mileageAmount)} className={`${inputCls} w-16`} /></td>
-                    </tr>
-                  );
-                })}
-                <tr className="font-semibold text-slate-200">
-                  <td className={td} colSpan={5}>TOTAL</td>
-                  <td className={td}>{totals.st}</td>
-                  <td className={td}>{totals.ot}</td>
-                  <td className={td}>{totals.pto}</td>
-                  <td className={td}>{totals.vac}</td>
-                  <td className={td}>{totals.hol}</td>
-                  <td className={td}>{money(totals.perDiem)}</td>
-                  <td className={td}>{totals.miles}</td>
-                  <td className={td}>{money(totals.mileageAmt)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <HoursTable
+            days={days.map((date, i) => ({ label: DAY_LABELS[i], date: isoDate(date) }))}
+            initial={initialLines}
+            weekJobNumber={existing?.jobNumber ?? e.jobNumber ?? ""}
+          />
+          <p className="-mt-2 text-[11px] text-slate-500">
+            Worked on more than one job in a day? Click <span className="text-cyan-400">+ Split</span> under the day and enter the other FER Job # and its hours. A blank FER Job # uses the week&apos;s FER Job # above.
+          </p>
 
           <label className="block text-xs text-slate-400">
             Notes
