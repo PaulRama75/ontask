@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 
 const base = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q = "" } = await searchParams;
   const me = await getCurrentUser();
   if (!me) redirect("/login");
   const nav = await getNavAccess(me.role);
@@ -43,6 +44,34 @@ export default async function AdminPage() {
   ]);
 
   const duplicateIds = findDuplicateEmployeeIds(employees);
+
+  // Search matches name, email, status, and the assigned Project Lead/Manager
+  // (by email or display name).
+  const contactName = new Map(
+    [...projectLeads, ...projectManagers].map((u) => [u.email.toLowerCase(), u.name ?? ""]),
+  );
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? employees.filter((e) => {
+        const pl = e.projectLeadEmail ?? "";
+        const pm = e.projectManagerEmail ?? "";
+        const haystack = [
+          e.firstName,
+          e.lastName,
+          `${e.firstName ?? ""} ${e.lastName ?? ""}`,
+          e.email,
+          e.status,
+          pl,
+          contactName.get(pl.toLowerCase()),
+          pm,
+          contactName.get(pm.toLowerCase()),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(needle);
+      })
+    : employees;
 
   return (
     <main className="min-h-screen py-10">
@@ -111,7 +140,29 @@ export default async function AdminPage() {
 
         {canAssign && <ImportEmployees />}
 
-        <section className="mt-6 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+        <form method="get" className="mt-6 flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Search name, email, status, Project Lead or Manager…"
+            aria-label="Search employees"
+            className="w-full max-w-md rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+          />
+          <button type="submit" className="rounded-md border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5">
+            Search
+          </button>
+          {needle && (
+            <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
+              Clear
+            </Link>
+          )}
+          <span className="ml-auto text-xs text-slate-500">
+            {needle ? `${shown.length} of ${employees.length} employees` : `${employees.length} employees`}
+          </span>
+        </form>
+
+        <section className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-white/10 bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
               <tr>
@@ -127,14 +178,16 @@ export default async function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {employees.length === 0 && (
+              {shown.length === 0 && (
                 <tr>
                   <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-slate-500">
-                    No employees yet. Generate a link above to get started.
+                    {employees.length === 0
+                      ? "No employees yet. Generate a link above to get started."
+                      : "No employees match your search."}
                   </td>
                 </tr>
               )}
-              {employees.map((e) => {
+              {shown.map((e) => {
                 const link = e.onboardingLink ? `${base}/onboard/${e.onboardingLink.token}` : null;
                 const employeeName = [e.firstName, e.lastName].filter(Boolean).join(" ") || "employee";
                 const linkLabel = `${employeeName}_onboarding`;

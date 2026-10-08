@@ -3,6 +3,24 @@
 import { prisma } from "@/lib/prisma";
 import { weekDates, parseIsoDate, isoDate } from "@/lib/timesheetWeek";
 import { redirect } from "next/navigation";
+import { randomUUID } from "node:crypto";
+import { sendEmail } from "@/lib/email";
+import { dateOnly } from "@/lib/formPdf";
+import {
+  loadTimesheetExport,
+  buildTimesheetXlsx,
+  buildTimesheetPdf,
+  timesheetFileBase,
+  timesheetTotals,
+} from "@/lib/timesheetExport";
+
+// The link is public (no login), so cap how many emails one link can send.
+const EMAILS_PER_HOUR = 5;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
 
 const num = (form: FormData, key: string): number | null => {
   const v = form.get(key);
@@ -85,4 +103,47 @@ export async function saveTimesheet(form: FormData): Promise<void> {
   });
 
   redirect(`/timesheet/${token}?week=${isoDate(weekEnding)}&saved=1`);
+}
+
+// Emails the saved week (Excel + PDF) to any address the employee types --
+// e.g. themselves, their supervisor, or the client.
+export async function emailTimesheet(form: FormData): Promise<void> {
+  const token = String(form.get("token") ?? "");
+  const weekEndingStr = String(form.get("weekEnding") ?? "");
+  const to = String(form.get("to") ?? "").trim();
+  const weekEnding = parseIsoDate(weekEndingStr);
+  if (!weekEnding) throw new Error("Invalid week.");
+
+  const link = await prisma.employeeTimesheetToken.findUnique({ where: { token } });
+  if (!link || link.revokedAt) throw new Error("This link is no longer valid.");
+
+  const back = (status: string) =>
+    redirect(`/timesheet/${token}?week=${isoDate(weekEnding)}&email=${status}`);
+  if (!EMAIL_RE.test(to) || to.length > 254) back("invalid");
+
+  const prefix = `ts-email:${link.employeeId}:`;
+  const recent = await prisma.notificationLog.count({
+    where: { key: { startsWith: prefix }, createdAt: { gt: new Date(Date.now() - 3600_000) } },
+  });
+  if (recent >= EMAILS_PER_HOUR) back("limit");
+
+  const data = await loadTimesheetExport(link.employeeId, weekEnding);
+  const [xlsx, pdf] = await Promise.all([buildTimesheetXlsx(data), buildTimesheetPdf(data)]);
+  const base = timesheetFileBase(data);
+  const tot = timesheetTotals(data);
+  const hours = Object.values(tot.hours).reduce((s, v) => s + v, 0);
+
+  await prisma.notificationLog.create({ data: { key: `${prefix}${Date.now()}:${randomUUID()}` } });
+  const ok = await sendEmail({
+    to,
+    subject: `Time & Expense Report - ${data.employeeName} - WE ${dateOnly(weekEnding)}`,
+    html: `<p>Attached is the Time &amp; Expense Report for <strong>${escapeHtml(data.employeeName)}</strong>, week ending ${dateOnly(weekEnding)}${data.clientName ? ` (${escapeHtml(data.clientName)})` : ""}.</p>
+<p>Total hours: ${hours} &middot; Amount due to employee: $${tot.amountDue.toFixed(2)}</p>
+<p style="font-size:12px;color:#94a3b8;">Sent from the FER timesheet portal.</p>`,
+    attachments: [
+      { filename: `${base}.xlsx`, content: xlsx.toString("base64") },
+      { filename: `${base}.pdf`, content: Buffer.from(pdf).toString("base64") },
+    ],
+  });
+  back(ok ? "sent" : "failed");
 }
