@@ -9,6 +9,13 @@ export default function ServiceWorkerRegistrar() {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
 
+    // `next dev` rebuilds /_next/static files under the same names, so a
+    // caching worker would serve stale code locally. Production only.
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+      return;
+    }
+
     const register = () => {
       navigator.serviceWorker.register("/sw.js").catch((err) => {
         // Non-fatal: the app works without the SW, it just isn't installable.
