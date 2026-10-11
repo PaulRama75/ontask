@@ -23,11 +23,6 @@ type EmployeeData = {
 
 type CertRow = { name: string; issuer: string; issued: string; expiry: string };
 
-// Document categories that must have at least one file on record. A file is
-// only required in THIS submission if none was uploaded previously, so
-// resubmitting to fix one field doesn't force re-uploading everything.
-const REQUIRED_DOC_CATEGORIES = new Set(["LICENSE", "SSN"]);
-
 const field =
   "mt-1 w-full rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 shadow-sm focus:border-cyan-400 focus:ring-cyan-400";
 const labelCls = "block text-sm font-medium text-slate-300";
@@ -135,7 +130,7 @@ export default function OnboardingForm({
           <Input name="email" label="Email" type="email" defaultValue={employee.email} required />
           <Input name="phone" label="Phone" defaultValue={employee.phone} required />
           <Input name="ssn" label="Social Security Number" defaultValue={employee.ssn} placeholder="XXX-XX-XXXX" />
-          <Input name="driversLicenseNumber" label="Driver's license #" defaultValue={employee.driversLicenseNumber} required />
+          <Input name="driversLicenseNumber" label="Driver's license #" defaultValue={employee.driversLicenseNumber} />
         </Grid>
       </Section>
 
@@ -192,13 +187,13 @@ export default function OnboardingForm({
       <Section title="Documents" subtitle="Upload a clear photo or PDF for each. You can attach multiple files per type.">
         <div className="space-y-4">
           {DOCUMENT_CATEGORIES.map((cat) => {
-            const isRequired = REQUIRED_DOC_CATEGORIES.has(cat.key);
+            // All document uploads are optional.
             const alreadyOnFile = existingDocCategories.includes(cat.key);
             return (
               <div key={cat.key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <label className="text-sm font-medium text-slate-300">
-                  {cat.label} {isRequired && <span className="text-rose-400">*</span>}
-                  {isRequired && alreadyOnFile && (
+                  {cat.label}
+                  {alreadyOnFile && (
                     <span className="ml-1 text-xs font-normal text-emerald-400">(on file)</span>
                   )}
                 </label>
@@ -210,7 +205,6 @@ export default function OnboardingForm({
                     type="file"
                     name={`file_${cat.key}`}
                     multiple
-                    required={isRequired && !alreadyOnFile}
                     accept="application/pdf,image/*"
                     onChange={() => resetAccept(cat.key)}
                     className="text-sm text-slate-400 file:mr-3 file:rounded-md file:border-0 file:bg-blue-500/15 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-blue-300 hover:file:bg-blue-500/25"

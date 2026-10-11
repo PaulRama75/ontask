@@ -33,7 +33,7 @@ export default async function OnboardPage({
             Complete your employee onboarding
           </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Fill out your information and attach the required documents. Fields
+            Fill out your information and attach any documents you have. Fields
             marked <span className="text-rose-400">*</span> are required.
           </p>
         </header>

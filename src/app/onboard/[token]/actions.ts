@@ -32,7 +32,31 @@ function dateOrNull(form: FormData, key: string): Date | null {
 
 export type SubmitResult = { ok: true } | { ok: false; error: string };
 
-export async function submitOnboarding(
+// An unexpected failure (storage, database, encryption key...) used to bubble
+// up as Next's blank "This page couldn't load" screen and lose what the new
+// hire typed. Log the real cause and hand the form a message instead.
+async function guarded(label: string, run: () => Promise<SubmitResult>): Promise<SubmitResult> {
+  try {
+    return await run();
+  } catch (err) {
+    console.error(`[onboarding] ${label} failed:`, err);
+    return {
+      ok: false,
+      error:
+        "Something went wrong saving your information. Your answers are still on this page - please try again in a minute, or contact HR if it keeps happening.",
+    };
+  }
+}
+
+export async function submitOnboarding(token: string, form: FormData): Promise<SubmitResult> {
+  return guarded("submit", () => submitOnboardingInner(token, form));
+}
+
+export async function saveOnboardingDraft(token: string, form: FormData): Promise<SubmitResult> {
+  return guarded("save draft", () => saveOnboardingDraftInner(token, form));
+}
+
+async function submitOnboardingInner(
   token: string,
   form: FormData,
 ): Promise<SubmitResult> {
@@ -56,25 +80,8 @@ export async function submitOnboarding(
   if (!str(form, "city")) missing.push("City");
   if (!str(form, "state")) missing.push("State");
   if (!str(form, "zip")) missing.push("ZIP");
-  if (!str(form, "driversLicenseNumber")) missing.push("Driver's license #");
-
-  // Driver's License and Social Security Card documents: required unless
-  // one is already on file from a previous submission.
-  const REQUIRED_DOC_CATEGORIES: { key: string; label: string }[] = [
-    { key: "LICENSE", label: "Driver's License document" },
-    { key: "SSN", label: "Social Security Card document" },
-  ];
-  const existingRequiredDocs = await prisma.document.findMany({
-    where: { employeeId, category: { in: REQUIRED_DOC_CATEGORIES.map((c) => c.key) } },
-    select: { category: true },
-  });
-  const hasExisting = (cat: string) => existingRequiredDocs.some((d) => d.category === cat);
-  for (const cat of REQUIRED_DOC_CATEGORIES) {
-    const hasNewFile = form
-      .getAll(`file_${cat.key}`)
-      .some((f) => f instanceof File && f.size > 0);
-    if (!hasNewFile && !hasExisting(cat.key)) missing.push(cat.label);
-  }
+  // Driver's license # and the Driver's License / Social Security Card
+  // documents are optional.
 
   if (missing.length > 0) {
     return { ok: false, error: `Please provide: ${missing.join(", ")}.` };
@@ -197,7 +204,7 @@ ${emailButton(`${base}/admin/grid`, "Open Employee Data Grid")}`;
 // checks, without marking the link "used", and without notifying HR — lets
 // someone fill this out across multiple visits instead of losing everything
 // if they can't finish in one sitting.
-export async function saveOnboardingDraft(
+async function saveOnboardingDraftInner(
   token: string,
   form: FormData,
 ): Promise<SubmitResult> {
