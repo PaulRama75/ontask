@@ -25,13 +25,22 @@ function localPathFor(key: string) {
 let s3Client: S3Client | null = null;
 function getS3Client(): S3Client {
   if (s3Client) return s3Client;
+
+  const accessKeyId = process.env.S3_ACCESS_KEY;
+  const secretAccessKey = process.env.S3_SECRET_KEY;
+  const endpoint = process.env.S3_ENDPOINT;
+
   s3Client = new S3Client({
-    endpoint: process.env.S3_ENDPOINT,
     region: process.env.S3_REGION ?? "us-east-1",
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY!,
-      secretAccessKey: process.env.S3_SECRET_KEY!,
-    },
+    // Only pass a custom endpoint when one is set (e.g. DigitalOcean Spaces).
+    // Leave it unset for AWS S3 so the SDK uses the default regional endpoint.
+    ...(endpoint ? { endpoint } : {}),
+    // Only pass explicit credentials when BOTH keys are provided. When they are
+    // absent, the SDK falls back to its default credential chain — which on EC2
+    // resolves the instance's attached IAM role (no long-lived keys needed).
+    ...(accessKeyId && secretAccessKey
+      ? { credentials: { accessKeyId, secretAccessKey } }
+      : {}),
     forcePathStyle: false,
   });
   return s3Client;

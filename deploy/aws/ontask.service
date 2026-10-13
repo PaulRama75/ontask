@@ -1,0 +1,32 @@
+# systemd service that keeps `next start` running and restarts it on crash/reboot.
+# Install at /etc/systemd/system/ontask.service, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ontask
+#
+# Adjust User, WorkingDirectory, and the EnvironmentFile path to match your host.
+# Production secrets live in the EnvironmentFile (NOT committed to git).
+
+[Unit]
+Description=ontask Next.js app
+After=network.target
+
+[Service]
+Type=simple
+User=ontask
+WorkingDirectory=/home/ontask/ontask
+
+# Production environment variables (DATABASE_URL, SSN_ENCRYPTION_KEY, S3_*,
+# APP_BASE_URL, etc.). Create this file with 600 perms; see DEPLOY.md.
+EnvironmentFile=/home/ontask/ontask.env
+
+# Node must be on PATH; use the absolute path to `npm` if needed.
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+# next start binds the port from $PORT (default 3000); nginx proxies to it.
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target

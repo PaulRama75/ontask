@@ -51,7 +51,16 @@ export async function createSession(userId: string): Promise<void> {
   jar.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // Secure cookies are only sent over HTTPS. In production we want this ON,
+    // but when the app is temporarily reached over plain HTTP (e.g. by EC2 IP
+    // before TLS is set up), a secure cookie is accepted but never sent back —
+    // which looks exactly like "login works, then bounces to /login".
+    // COOKIE_SECURE lets you override: set it to "false" for HTTP testing, and
+    // remove it (or set "true") once the app is served over HTTPS.
+    secure:
+      process.env.COOKIE_SECURE !== undefined
+        ? process.env.COOKIE_SECURE === "true"
+        : process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });
