@@ -29,7 +29,15 @@ export async function mintUnlock(userId: string, scope: UnlockScope): Promise<vo
   jar.set(UNLOCK_COOKIE, raw, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // Same rule as the session cookie (see createSession): secure cookies are
+    // only sent over HTTPS, so over plain HTTP the unlock cookie is accepted
+    // but never sent back — which makes document downloads report "PIN required"
+    // even after a correct PIN. COOKIE_SECURE overrides for HTTP testing; set it
+    // to "false" for HTTP and remove it (or "true") once the app is on HTTPS.
+    secure:
+      process.env.COOKIE_SECURE !== undefined
+        ? process.env.COOKIE_SECURE === "true"
+        : process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });
