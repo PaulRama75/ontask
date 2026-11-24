@@ -29,8 +29,8 @@ export default function AssignContactCell({
         defaultValue={current ?? ""}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
         aria-label={kind === "PL" ? "Project Lead" : "Project Manager"}
-        className={`max-w-[11rem] rounded border bg-slate-800/60 px-1.5 py-1 text-xs focus:border-cyan-400 focus:outline-none ${
-          current ? "border-white/10 text-white" : "border-amber-500/40 text-amber-300"
+        className={`h-7 w-[11rem] max-w-[11rem] truncate rounded-md border bg-[#0a1426] px-2 text-xs focus:border-sky-400/60 focus:outline-none focus:ring-1 focus:ring-sky-400/40 ${
+          current ? "border-white/10 text-white" : "border-amber-500/40 bg-amber-500/[0.06] text-amber-300"
         }`}
       >
         <option value="">{kind === "PL" ? "Assign Lead…" : "Assign Manager…"}</option>

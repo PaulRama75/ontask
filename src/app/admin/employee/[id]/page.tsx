@@ -11,6 +11,7 @@ import {
   isAssignedProjectLeadOrManager,
   hasEmployeeDocumentGrant,
   getNavAccess,
+  getOwnEmployeeId,
 } from "@/lib/rbac";
 import { saveProjectLeadDetails, grantDocumentAccess, revokeDocumentAccess } from "../../actions";
 import DocRow from "./DocRow";
@@ -99,6 +100,10 @@ export default async function EmployeeLibraryPage({
   if (!canLib && !canEditPL && !isProjectLead && !isProjectManager && !granted) {
     redirect("/admin/grid");
   }
+  // An Employee may only ever open their own record.
+  if (me.role === "EMPLOYEE" && id !== (await getOwnEmployeeId(me))) {
+    redirect("/admin/grid");
+  }
 
   const e = await prisma.employee.findUnique({
     where: { id },
@@ -177,32 +182,49 @@ export default async function EmployeeLibraryPage({
   const timesheetBase = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
   return (
-    <main className="min-h-screen py-10">
-      <div className="mx-auto max-w-4xl px-4">
-        <div className="flex items-center justify-between">
-          <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
-            ← Back to admin
-          </Link>
-          {(canEditThis || isAdmin) && (
-            <Link href={`/admin/employee/${id}/travel`} className="text-sm text-cyan-400 hover:underline">
-              Travel Request →
-            </Link>
-          )}
-        </div>
-        <h1 className="mt-2 text-2xl font-bold text-white">{name}</h1>
-        <p className="text-sm text-slate-400">
-          {canFullView ? "Document library" : "Project Lead details"} · status {e.status}
-        </p>
+    <main className="min-h-screen py-3">
+      <div className="mx-auto max-w-6xl px-4">
+        <section className={cardCls}>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 text-xs font-bold text-white shadow-lg shadow-blue-600/30">
+                {initialsOf(name)}
+              </span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="break-words text-base font-bold tracking-wide text-white">{name}</h1>
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusTone(e.status)}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {e.status}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {canFullView ? "Employee profile · Document library" : "Project Lead details"}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/admin" className={chipLinkCls}>
+                ← Back to admin
+              </Link>
+              {(canEditThis || isAdmin) && (
+                <Link href={`/admin/employee/${id}/travel`} className={chipLinkCls}>
+                  Travel Request →
+                </Link>
+              )}
+            </div>
+          </div>
+        </section>
         {travelSent === "1" && (
-          <p className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+          <p className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
             Travel request submitted and emailed to the Travel Administrator.
           </p>
         )}
 
         {(canFullView || canEditThis) && (
-          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-            <h2 className="text-lg font-semibold text-white">Project Lead Details</h2>
-            <p className="mt-1 text-xs text-slate-400">
+          <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+            <h2 className={h2Cls}>Project Lead Details</h2>
+            <p className="mt-0.5 text-[11px] text-slate-400">
               Filled in by the Project Lead after the employee completes onboarding.
             </p>
             {/* key={e.id} forces a full remount when navigating between employees.
@@ -214,7 +236,7 @@ export default async function EmployeeLibraryPage({
             <form
               key={e.id}
               action={saveProjectLeadDetails}
-              className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"
+              className="mt-3 grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-4"
             >
               <input type="hidden" name="employeeId" value={e.id} />
 
@@ -389,13 +411,15 @@ export default async function EmployeeLibraryPage({
                     )}
                   </PLField>
 
-                  <PLField label="Current Lift Operator Certifications (if applicable)">
-                    {canEditThis ? (
-                      <input name="liftOperatorCertifications" defaultValue={e.liftOperatorCertifications ?? ""} className={inputCls} />
-                    ) : (
-                      <ReadOnly value={e.liftOperatorCertifications} />
-                    )}
-                  </PLField>
+                  <div className="sm:col-span-2">
+                    <PLField label="Current Lift Operator Certifications (if applicable)">
+                      {canEditThis ? (
+                        <input name="liftOperatorCertifications" defaultValue={e.liftOperatorCertifications ?? ""} className={inputCls} />
+                      ) : (
+                        <ReadOnly value={e.liftOperatorCertifications} />
+                      )}
+                    </PLField>
+                  </div>
 
                   <PLField label="Site Specifics Needed">
                     {canEditThis ? (
@@ -431,7 +455,7 @@ export default async function EmployeeLibraryPage({
                     </PLField>
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 lg:col-span-4">
                     <PLField label="Safety Equipment Needed">
                       {canEditThis ? (
                         <CheckboxGroup
@@ -458,8 +482,8 @@ export default async function EmployeeLibraryPage({
               )}
 
               {canEditThis && (
-                <div className="sm:col-span-2">
-                  <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
+                <div className="flex justify-end border-t border-white/10 pt-3 sm:col-span-2 lg:col-span-4">
+                  <button type="submit" className={primaryBtnCls}>
                     Save details
                   </button>
                 </div>
@@ -469,14 +493,14 @@ export default async function EmployeeLibraryPage({
         )}
 
         {canFileStatusChange && (
-          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-            <h2 className="text-lg font-semibold text-white">Employee Status Change</h2>
-            <p className="mt-1 text-xs text-slate-400">
+          <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+            <h2 className={h2Cls}>Employee Status Change</h2>
+            <p className="mt-0.5 text-[11px] text-slate-400">
               Third step after Project Lead Details. Submitting updates this employee&apos;s record (site,
               job number, employment type, driving record, credit card, and Inactive for a layoff) and
               emails HR, Tracks, and Safety the completed form as a PDF.
             </p>
-            <form action={submitStatusChange} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <form action={submitStatusChange} className="mt-3 grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-4">
               <input type="hidden" name="employeeId" value={e.id} />
 
               <PLField label="Effective Date of Change">
@@ -513,7 +537,7 @@ export default async function EmployeeLibraryPage({
                 <input name="requestingManagerName" defaultValue={me.name ?? ""} className={inputCls} />
               </PLField>
 
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 lg:col-span-4">
                 <PLField label="Details of Change">
                   <textarea name="detailsOfChange" rows={2} className={inputCls} />
                 </PLField>
@@ -557,17 +581,17 @@ export default async function EmployeeLibraryPage({
                 </select>
               </PLField>
 
-              <div className="sm:col-span-2">
-                <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500">
+              <div className="flex justify-end border-t border-white/10 pt-3 sm:col-span-2 lg:col-span-4">
+                <button type="submit" className={primaryBtnCls}>
                   Submit Status Change
                 </button>
               </div>
             </form>
 
             {statusChangeHistory.length > 0 && (
-              <div className="mt-6 border-t border-white/10 pt-4">
-                <h3 className="text-sm font-semibold text-slate-300">Previous changes</h3>
-                <ul className="mt-2 space-y-2 text-xs text-slate-400">
+              <div className="mt-3 border-t border-white/10 pt-3">
+                <h3 className={h3Cls}>Previous changes</h3>
+                <ul className="mt-1.5 space-y-1 text-xs text-slate-400">
                   {statusChangeHistory.map((s) => (
                     <li key={s.id}>
                       {s.createdAt.toISOString().slice(0, 10)} — {s.submittedByName}:{" "}
@@ -582,15 +606,15 @@ export default async function EmployeeLibraryPage({
         )}
 
         {canFullView && (
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <h2 className="text-lg font-semibold text-white">Details</h2>
-          <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+        <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+          <h2 className={h2Cls}>Details</h2>
+          <dl className="mt-3 grid grid-cols-1 gap-x-3 gap-y-2.5 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <Detail label="Email" value={e.email} />
             <Detail label="Phone" value={e.phone} />
             {canView(access, "ssn") && (
               <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">SSN</dt>
-                <dd className="text-white">
+                <dt className={labelCls}>SSN</dt>
+                <dd className="mt-0.5 text-white">
                   <SecretField
                     maskedValue={maskSsn(safeDecrypt(e.ssn))}
                     employeeId={e.id}
@@ -608,8 +632,8 @@ export default async function EmployeeLibraryPage({
                 reaches this {canFullView} section at all). */}
             {canView(access, "driverLicense") && (
               <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Driver&apos;s license</dt>
-                <dd className="text-white">
+                <dt className={labelCls}>Driver&apos;s license</dt>
+                <dd className="mt-0.5 text-white">
                   <SecretField
                     maskedValue={maskLast4(safeDecrypt(e.driversLicenseNumber))}
                     employeeId={e.id}
@@ -620,11 +644,28 @@ export default async function EmployeeLibraryPage({
                 </dd>
               </div>
             )}
+            {canView(access, "dob") && (
+              <Detail label="Date of Birth" value={e.dateOfBirth ? e.dateOfBirth.toISOString().slice(0, 10) : null} />
+            )}
+            {canView(access, "ktn") && (
+              <div>
+                <dt className={labelCls}>Known Traveler #</dt>
+                <dd className="mt-0.5 text-white">
+                  <SecretField
+                    maskedValue={maskLast4(safeDecrypt(e.knownTravelerNumber))}
+                    employeeId={e.id}
+                    field="ktn"
+                    label="Known Traveler #"
+                    canReveal={canView(access, "ktn")}
+                  />
+                </dd>
+              </div>
+            )}
             <Detail label="Address" value={[e.addressLine1, e.addressLine2, e.city, e.state, e.zip].filter(Boolean).join(", ")} />
             {canView(access, "safetyExpiry") && (
               <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Safety Council ID</dt>
-                <dd className="text-white">
+                <dt className={labelCls}>Safety Council ID</dt>
+                <dd className="mt-0.5 text-white">
                   <SecretField
                     maskedValue={maskLast4(safeDecrypt(e.safetyCouncilId))}
                     employeeId={e.id}
@@ -637,8 +678,8 @@ export default async function EmployeeLibraryPage({
             )}
             {canView(access, "twicExpiry") && (
               <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">TWIC #</dt>
-                <dd className="text-white">
+                <dt className={labelCls}>TWIC #</dt>
+                <dd className="mt-0.5 text-white">
                   <SecretField
                     maskedValue={maskLast4(safeDecrypt(e.twicNumber))}
                     employeeId={e.id}
@@ -655,27 +696,27 @@ export default async function EmployeeLibraryPage({
 
         {canFullView && (
         <>
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Documents</h2>
+        <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className={h2Cls}>Documents</h2>
             {e.documents.length > 0 && (
               <PinUnlockLink
                 href={`/api/documents-export/${e.id}`}
                 scope="export"
-                className="text-sm text-cyan-400 hover:underline"
+                className="text-xs font-semibold text-sky-300 hover:text-sky-200 hover:underline"
               >
                 Download all
               </PinUnlockLink>
             )}
           </div>
-          <div className="mt-3 space-y-4">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {DOCUMENT_CATEGORIES.map((cat) => {
               const docs = docsByCategory(cat.key);
               return (
-                <div key={cat.key}>
-                  <h3 className="text-sm font-semibold text-slate-300">{cat.label}</h3>
+                <div key={cat.key} className="min-w-0 rounded-lg border border-white/10 bg-[#0a1426]/70 p-2.5">
+                  <h3 className={h3Cls}>{cat.label}</h3>
                   {docs.length === 0 ? (
-                    <p className="text-sm text-slate-500">No files</p>
+                    <p className="mt-1 text-xs text-slate-500">No files</p>
                   ) : (
                     <ul className="mt-1 space-y-1">
                       {docs.map((d) => (
@@ -690,8 +731,8 @@ export default async function EmployeeLibraryPage({
         </section>
 
         {e.certifications.length > 0 && (
-          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-            <h2 className="text-lg font-semibold text-white">Certifications</h2>
+          <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+            <h2 className={h2Cls}>Certifications</h2>
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
               {e.certifications.map((c) => (
                 <li key={c.id}>
@@ -707,16 +748,16 @@ export default async function EmployeeLibraryPage({
         )}
 
         {canShareTimesheet && (
-          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Timesheets</h2>
+          <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className={h2Cls}>Timesheets</h2>
               {canSeeTimesheetsPage && (
-                <Link href={`/admin/timesheets?employeeId=${e.id}`} className="text-sm text-cyan-400 hover:underline">
+                <Link href={`/admin/timesheets?employeeId=${e.id}`} className="text-xs font-semibold text-sky-300 hover:text-sky-200 hover:underline">
                   View timesheets →
                 </Link>
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-0.5 text-[11px] text-slate-400">
               A private link {name || "the employee"} uses to enter their own weekly time -- no password,
               and no access to anything else in this app.{" "}
               {e.email
@@ -725,7 +766,7 @@ export default async function EmployeeLibraryPage({
             </p>
             {timesheetToken && !timesheetToken.revokedAt ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <code className="rounded bg-slate-950/60 px-2 py-1 text-xs text-cyan-300 break-all">
+                <code className="rounded-lg border border-white/10 bg-[#0a1426] px-2 py-1 text-xs text-sky-300 break-all">
                   {timesheetBase}/timesheet/{timesheetToken.token}
                 </code>
                 {e.email && (
@@ -742,7 +783,7 @@ export default async function EmployeeLibraryPage({
             ) : (
               <form action={generateTimesheetLink} className="mt-3">
                 <input type="hidden" name="employeeId" value={e.id} />
-                <button className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+                <button className={secondaryBtnCls}>
                   {timesheetToken ? "Generate new link" : "Generate link"}
                 </button>
               </form>
@@ -751,18 +792,18 @@ export default async function EmployeeLibraryPage({
         )}
 
         {isAdmin && (
-          <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-            <h2 className="text-lg font-semibold text-white">Shared with</h2>
-            <p className="mt-1 text-xs text-slate-400">
+          <section className={`mt-3 p-3 sm:p-4 ${cardCls}`}>
+            <h2 className={h2Cls}>Shared with</h2>
+            <p className="mt-0.5 text-[11px] text-slate-400">
               Give one specific person view/download access to this employee&apos;s documents, regardless
               of their role. This never grants edit access.
             </p>
 
             {existingGrants.length > 0 && (
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-3 space-y-1.5">
                 {existingGrants.map((g) => (
-                  <li key={g.id} className="flex items-center justify-between text-sm">
-                    <span className="text-white">{g.user.name || g.user.email}</span>
+                  <li key={g.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#0a1426]/70 px-2.5 py-1.5 text-sm">
+                    <span className="min-w-0 break-all text-white">{g.user.name || g.user.email}</span>
                     <PinConfirmButton
                       action={revokeDocumentAccess}
                       fields={{ employeeId: id, userId: g.userId }}
@@ -777,9 +818,9 @@ export default async function EmployeeLibraryPage({
             )}
 
             {grantableUsers.length > 0 ? (
-              <form action={grantDocumentAccess} className="mt-4 flex items-center gap-2">
+              <form action={grantDocumentAccess} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input type="hidden" name="employeeId" value={id} />
-                <select name="userId" defaultValue="" required className={inputCls}>
+                <select name="userId" defaultValue="" required className={`${inputCls} min-w-0`}>
                   <option value="" disabled>
                     Choose a person…
                   </option>
@@ -789,7 +830,7 @@ export default async function EmployeeLibraryPage({
                     </option>
                   ))}
                 </select>
-                <button className="whitespace-nowrap rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5">
+                <button className={`whitespace-nowrap ${secondaryBtnCls}`}>
                   Grant access
                 </button>
               </form>
@@ -808,13 +849,45 @@ export default async function EmployeeLibraryPage({
 function Detail({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className="text-white">{value || "—"}</dd>
+      <dt className={labelCls}>{label}</dt>
+      <dd className="mt-0.5 break-words text-white">{value || "—"}</dd>
     </div>
   );
 }
 
-const inputCls = "rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400 w-full";
+const inputCls =
+  "w-full rounded-lg border border-white/10 bg-[#0a1426] px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none focus:ring-1 focus:ring-sky-400/40 [color-scheme:dark]";
+const cardCls =
+  "rounded-xl border border-sky-400/15 bg-gradient-to-b from-[#0f1d36]/95 to-[#0b1529]/95 shadow-xl shadow-black/40 ring-1 ring-white/[0.03] backdrop-blur";
+const h2Cls =
+  "flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-white before:h-3.5 before:w-1 before:rounded-full before:bg-gradient-to-b before:from-sky-400 before:to-blue-600 before:content-['']";
+const h3Cls = "text-[11px] font-semibold uppercase tracking-wider text-sky-300/90";
+const labelCls = "text-[10px] font-semibold uppercase tracking-wider text-slate-400";
+const chipLinkCls =
+  "flex h-8 items-center rounded-lg border border-white/10 bg-[#0a1426] px-2.5 text-[11px] font-semibold uppercase tracking-wider text-sky-300 hover:border-sky-400/50 hover:text-sky-200";
+const primaryBtnCls =
+  "h-8 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 text-xs font-semibold uppercase tracking-wider text-white shadow-lg shadow-blue-600/30 hover:from-sky-400 hover:to-blue-500";
+const secondaryBtnCls =
+  "h-8 rounded-lg border border-white/10 bg-[#0a1426] px-3 text-xs text-slate-300 hover:border-sky-400/40 hover:bg-white/5";
+
+// Display only: initials for the header badge.
+function initialsOf(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join("") || "?"
+  );
+}
+
+// Display only: colour for the status pill in the header.
+function statusTone(status: string) {
+  if (status === "APPROVED" || status === "ACTIVE") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  if (status === "INACTIVE" || status === "REJECTED") return "border-rose-500/30 bg-rose-500/10 text-rose-300";
+  return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+}
 
 function fmtDate(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "—";
@@ -831,14 +904,14 @@ function yesNoText(v: boolean | null) {
 function PLField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={labelCls}>{label}</div>
       <div className="mt-1">{children}</div>
     </div>
   );
 }
 
 function ReadOnly({ value }: { value?: string | null }) {
-  return <div className="text-white">{value || "—"}</div>;
+  return <div className="break-words rounded-lg border border-white/5 bg-[#0a1426]/50 px-2.5 py-1.5 text-xs text-white">{value || "—"}</div>;
 }
 
 function CheckboxGroup({
@@ -851,15 +924,18 @@ function CheckboxGroup({
   selected: string[];
 }) {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+    <div className="flex flex-wrap gap-1.5">
       {options.map((opt) => (
-        <label key={opt} className="flex items-center gap-1.5 text-sm text-slate-300">
+        <label
+          key={opt}
+          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-[#0a1426] px-2 py-1 text-xs text-slate-300 hover:border-sky-400/40 has-[:checked]:border-sky-400/50 has-[:checked]:bg-sky-500/10 has-[:checked]:text-sky-100"
+        >
           <input
             type="checkbox"
             name={name}
             value={opt}
             defaultChecked={selected.includes(opt)}
-            className="h-4 w-4 rounded border-white/10 bg-slate-800"
+            className="h-3.5 w-3.5 rounded border-white/10 bg-slate-800 accent-sky-500"
           />
           {opt}
         </label>

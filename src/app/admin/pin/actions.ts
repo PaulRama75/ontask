@@ -32,7 +32,7 @@ export async function verifyPinForUnlock(
 
 // The secret ID fields a correct PIN can reveal. Each maps to one encrypted
 // Employee column and the rbac view-key that gates it.
-export type SecretFieldKey = "ssn" | "driversLicense" | "safetyCouncil" | "twic";
+export type SecretFieldKey = "ssn" | "driversLicense" | "safetyCouncil" | "twic" | "ktn";
 
 type RevealResult =
   | { ok: true; value: string }
@@ -45,11 +45,12 @@ type RevealResult =
 // field -> { encrypted Employee column, rbac view-key }. The view-key is the
 // same column key canView() checks when the page/grid decides whether to show
 // the masked last-4 + eye, so the reveal gate can never exceed display gating.
-const FIELD_MAP: Record<SecretFieldKey, { column: "ssn" | "driversLicenseNumber" | "safetyCouncilId" | "twicNumber"; viewKey: string }> = {
+const FIELD_MAP: Record<SecretFieldKey, { column: "ssn" | "driversLicenseNumber" | "safetyCouncilId" | "twicNumber" | "knownTravelerNumber"; viewKey: string }> = {
   ssn: { column: "ssn", viewKey: "ssn" },
   driversLicense: { column: "driversLicenseNumber", viewKey: "driverLicense" },
   safetyCouncil: { column: "safetyCouncilId", viewKey: "safetyExpiry" },
   twic: { column: "twicNumber", viewKey: "twicExpiry" },
+  ktn: { column: "knownTravelerNumber", viewKey: "ktn" },
 };
 
 // Reveal a single employee's full secret ID (SSN / driver's license / safety
@@ -88,6 +89,7 @@ export async function revealField(
     driversLicenseNumber: true,
     safetyCouncilId: true,
     twicNumber: true,
+    knownTravelerNumber: true,
     site: true,
     projectLeadEmail: true,
     projectManagerEmail: true,

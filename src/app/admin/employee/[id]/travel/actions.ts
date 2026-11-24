@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { notifyTravelRequestSubmitted } from "@/lib/notifications";
 import { redirect } from "next/navigation";
+import { encField } from "@/lib/crypto";
 
 const str = (form: FormData, key: string): string | null => {
   const v = form.get(key);
@@ -66,7 +67,22 @@ export async function submitTravelRequest(form: FormData): Promise<void> {
     submittedByName: me.name || me.email,
   };
 
-  const created = await prisma.travelRequest.create({ data });
+  // Also keep DOB / Known Traveler # / phone on the employee's own record so
+  // the next travel request pre-fills them. A blank field on the form never
+  // clears what is already saved. Email is deliberately NOT copied back: it is
+  // the key that links an Employee-role login to this record (getOwnEmployeeId).
+  const profile = {
+    ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
+    ...(data.knownTravelerNumber ? { knownTravelerNumber: encField(data.knownTravelerNumber) } : {}),
+    ...(data.phone ? { phone: data.phone } : {}),
+  };
+
+  const [created] = await prisma.$transaction([
+    prisma.travelRequest.create({ data }),
+    ...(Object.keys(profile).length > 0
+      ? [prisma.employee.update({ where: { id: employeeId }, data: profile })]
+      : []),
+  ]);
   await notifyTravelRequestSubmitted(created);
 
   redirect(`/admin/employee/${employeeId}?travelSent=1`);

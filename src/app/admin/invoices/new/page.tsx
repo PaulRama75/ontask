@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, getNavAccess, firstAllowedNavHref } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref, invoiceVisibilityWhere } from "@/lib/rbac";
 import NewInvoiceForm from "./NewInvoiceForm";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,8 @@ export default async function NewInvoicePage() {
   const [clients, jobNumbers] = await Promise.all([
     prisma.client.findMany({ select: { name: true }, distinct: ["name"], orderBy: { name: "asc" } }),
     prisma.invoice.findMany({
-      where: { jobNumber: { not: null } },
+      // Only job numbers from invoices this user can see (a PM/PL's own).
+      where: { AND: [invoiceVisibilityWhere(me), { jobNumber: { not: null } }] },
       select: { jobNumber: true },
       distinct: ["jobNumber"],
       orderBy: { jobNumber: "asc" },

@@ -17,7 +17,7 @@ export default function NameCell({
 }) {
   const submit = (el: HTMLInputElement) => el.form?.requestSubmit();
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex items-center gap-1">
       <form action={setEmployeeField} className="flex gap-1">
         <input type="hidden" name="employeeId" value={id} />
         <input type="hidden" name="column" value="name" />
@@ -32,7 +32,7 @@ export default function NameCell({
               e.currentTarget.blur();
             }
           }}
-          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
+          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] hover:border-white/10 focus:border-sky-400/60 focus:bg-[#0a1426] focus:outline-none"
         />
         <input
           name="lastName"
@@ -45,12 +45,14 @@ export default function NameCell({
               e.currentTarget.blur();
             }
           }}
-          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
+          className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] hover:border-white/10 focus:border-sky-400/60 focus:bg-[#0a1426] focus:outline-none"
         />
       </form>
       {canOpenLibrary && (
-        <Link href={`/admin/employee/${id}`} className="text-xs text-cyan-400 hover:underline">
-          Open details →
+        <Link href={`/admin/employee/${id}`} title="Open details"
+          aria-label="Open details"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-sky-400/25 bg-sky-400/[0.06] text-[11px] font-normal text-sky-300 hover:bg-sky-400/15 hover:text-sky-200">
+          →
         </Link>
       )}
     </div>

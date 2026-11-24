@@ -49,41 +49,43 @@ export default function NavAccessMatrix({
   return (
     <form
       onSubmit={onSubmit}
-      className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur"
+      className="border-t border-white/[0.06] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
     >
-      <table className="w-full text-left text-sm">
-        <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
+      <div className="max-h-[60vh] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1 [color-scheme:dark] [scrollbar-width:thin] [scrollbar-color:rgba(56,189,248,0.35)_#0a1426]">
+      <table className="w-full text-left text-[13px]">
+        <thead className="sticky top-0 z-10 bg-[#0d1a31] text-[11px] font-bold uppercase tracking-[0.08em] text-sky-300/90 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
           <tr>
-            <th className="px-4 py-3">Section</th>
-            <th className="px-4 py-3">Visible</th>
+            <th className="whitespace-nowrap px-3 py-2">Section</th>
+            <th className="whitespace-nowrap px-3 py-2">Visible</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.key} className="border-b border-white/10 last:border-0">
-              <td className="px-4 py-3 font-medium text-white">{item.label}</td>
-              <td className="px-4 py-3">
+            <tr key={item.key} className="border-b border-white/[0.06] transition-colors last:border-0 hover:bg-sky-400/[0.05]">
+              <td className="px-3 py-1.5 font-medium text-white">{item.label}</td>
+              <td className="px-3 py-1.5">
                 <input
                   type="checkbox"
                   checked={rows[item.key]}
                   onChange={(e) => toggle(item.key, e.target.checked)}
-                  className="h-4 w-4 rounded border-white/10 bg-slate-800"
+                  className="h-4 w-4 cursor-pointer rounded border-white/10 bg-[#0a1426] accent-sky-500"
                 />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="flex items-center gap-3 border-t border-white/10 px-4 py-3">
+      </div>
+      <div className="flex shrink-0 items-center gap-3 border-t border-white/[0.06] bg-[#0a1426]/60 px-3 py-2">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60"
+          className="flex h-8 items-center rounded-lg bg-gradient-to-b from-sky-500 to-blue-600 px-4 text-xs font-semibold text-white shadow-lg shadow-blue-900/50 transition-colors hover:from-sky-400 hover:to-blue-500 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save changes"}
         </button>
-        {saved && <span className="text-sm text-emerald-400">Saved.</span>}
-        {error && <span className="text-sm text-rose-400">{error}</span>}
+        {saved && <span className="text-xs font-medium text-emerald-300">Saved.</span>}
+        {error && <span className="text-xs font-medium text-rose-300">{error}</span>}
       </div>
     </form>
   );

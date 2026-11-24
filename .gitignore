@@ -48,3 +48,9 @@ next-env.d.ts
 # agent workflow scratch + git worktrees (never commit)
 /.agents
 /.worktrees
+
+# local backups
+/backups
+/.backup-*
+
+.backups/

@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { Readable } from "stream";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { encSsn, encField } from "./crypto";
+import { encSsn, encField, safeDecrypt, maskLast4 } from "./crypto";
 
 export const MAX_IMPORT_ROWS = 500;
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -27,6 +27,7 @@ export const IMPORT_COLUMNS = [
   { key: "driversLicenseNumber", header: "Driver License #", aliases: ["driverlicense", "driverslicense", "driverlicensenumber", "dl"] },
   { key: "ssn", header: "SSN", aliases: ["ss", "socialsecuritynumber"] },
   { key: "safetyCouncilExpiry", header: "Safety Council Expiry", aliases: ["safetyexpiry"] },
+  { key: "twicNumber", header: "TWIC Number", aliases: ["twic", "twiccard", "twiccardnumber"] },
   { key: "twicExpiry", header: "TWIC Expiry", aliases: ["twicexpiration"] },
   { key: "active", header: "Active", aliases: ["status"] },
 ] as const;
@@ -52,6 +53,7 @@ export type ImportRecord = {
   driversLicenseNumber: string | null;
   ssn: string | null;
   safetyCouncilExpiry: Date | null;
+  twicNumber: string | null;
   twicExpiry: Date | null;
   // null = cell left blank: "Yes" for a new employee, unchanged for an update.
   active: boolean | null;
@@ -235,11 +237,12 @@ export async function parseImportFile(
       // employee.update for matched rows (toUpdate copies record values into
       // its data) — so the ciphertext is what reaches the DB in either case;
       // no raw plaintext ID is ever persisted. encField/encSsn are idempotent.
-      // (safetyCouncilId/twicNumber are not import columns — only their
-      // expiry DATE fields are, and those stay plaintext.)
+      // (safetyCouncilId is not an import column — only its expiry DATE is,
+      // and dates stay plaintext. twicNumber is encrypted like the DL.)
       driversLicenseNumber: encField(str(raw.driversLicenseNumber ?? null)),
       ssn: encSsn(str(raw.ssn ?? null)),
       safetyCouncilExpiry: safety.value,
+      twicNumber: encField(str(raw.twicNumber ?? null)),
       twicExpiry: twic.value,
       active: activeRaw ? !["no", "n", "false", "0", "inactive"].includes(activeRaw) : null,
     };
@@ -275,6 +278,7 @@ const UPDATABLE = [
   "driversLicenseNumber",
   "ssn",
   "safetyCouncilExpiry",
+  "twicNumber",
   "twicExpiry",
   "active",
 ] as const;
@@ -286,7 +290,16 @@ const LABEL: Record<UpdatableKey, string> = Object.fromEntries(
 
 type FieldValue = string | number | boolean | Date | null;
 
-function same(a: FieldValue, b: FieldValue): boolean {
+// Encrypted ID fields whose import preview compares and shows the decrypted
+// value (each encryption uses a fresh IV, so ciphertexts never match).
+const SECRET_COMPARE = new Set<UpdatableKey>(["twicNumber"]);
+
+function same(a: FieldValue, b: FieldValue, key?: UpdatableKey): boolean {
+  if (key && SECRET_COMPARE.has(key)) {
+    const da = typeof a === "string" ? safeDecrypt(a)?.trim() ?? null : null;
+    const db = typeof b === "string" ? safeDecrypt(b)?.trim() ?? null : null;
+    return da === db;
+  }
   if (a instanceof Date || b instanceof Date) {
     const ad = a instanceof Date ? a.toISOString().slice(0, 10) : null;
     const bd = b instanceof Date ? b.toISOString().slice(0, 10) : null;
@@ -300,6 +313,7 @@ function display(key: UpdatableKey, v: FieldValue): string {
   if (v == null || v === "") return "(blank)";
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (SECRET_COMPARE.has(key)) return maskLast4(safeDecrypt(String(v)));
   if (key === "ssn") return `***-**-${String(v).replace(/\D/g, "").slice(-4)}`;
   return String(v);
 }
@@ -348,6 +362,7 @@ export async function classifyRows(rows: ParsedRow[], opts: { allowNameMatches: 
       driversLicenseNumber: true,
       ssn: true,
       safetyCouncilExpiry: true,
+      twicNumber: true,
       twicExpiry: true,
       active: true,
     },
@@ -380,7 +395,7 @@ export async function classifyRows(rows: ParsedRow[], opts: { allowNameMatches: 
     for (const key of UPDATABLE) {
       const next = r.record[key] as FieldValue;
       if (next == null || next === "") continue; // blank cells never erase
-      if (same(current[key], next)) continue;
+      if (same(current[key], next, key)) continue;
       data[key] = next;
       changes.push({ field: LABEL[key], from: display(key, current[key]), to: display(key, next) });
     }

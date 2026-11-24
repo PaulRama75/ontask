@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
 // The 9 application roles.
@@ -35,10 +36,36 @@ export function isAdminRole(role: string): boolean {
 
 // Sites a user is restricted to, based on their Site Access grants. Null
 // means unrestricted (no rows = sees everything) -- the convention used
-// everywhere Site Access applies (the data grid, and invoices).
+// everywhere Site Access applies (the data grid). Invoices don't use Site
+// Access -- see invoiceVisibilityWhere below.
 export async function getRestrictedSites(userId: string): Promise<Set<string> | null> {
   const rows = await prisma.userSite.findMany({ where: { userId }, select: { site: true } });
   return rows.length > 0 ? new Set(rows.map((r) => r.site)) : null;
+}
+
+// ---- Invoice visibility ----
+// Who may see which invoices (list, detail, billing summary, attachments,
+// comments):
+//   Admin / Super Admin -> every invoice
+//   Project Manager / Project Lead -> only invoices they created
+//   Account Manager -> every invoice past DRAFT (they review them)
+//   any other role -> none, even if the Invoices menu is turned on for it
+export function invoiceVisibilityWhere(me: { id: string; role: string }): Prisma.InvoiceWhereInput {
+  if (isAdminRole(me.role)) return {};
+  if (me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD") return { createdByUserId: me.id };
+  if (me.role === "ACCOUNT_MANAGER") return { status: { not: "DRAFT" } };
+  return { id: { in: [] } };
+}
+
+// Same rule as invoiceVisibilityWhere, for one already-loaded invoice.
+export function canViewInvoice(
+  me: { id: string; role: string },
+  invoice: { status: string; createdByUserId: string },
+): boolean {
+  if (isAdminRole(me.role)) return true;
+  if (me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD") return invoice.createdByUserId === me.id;
+  if (me.role === "ACCOUNT_MANAGER") return invoice.status !== "DRAFT";
+  return false;
 }
 
 // Logical columns shown in the data grid. These keys drive access control.
@@ -50,9 +77,12 @@ export const COLUMNS = [
   { key: "email", label: "Email" },
   { key: "phone", label: "Phone" },
   { key: "ssn", label: "SS#" },
+  // Travel profile (saved from the Travel Request form). Admin/HR only by default.
+  { key: "dob", label: "Date of Birth" },
+  { key: "ktn", label: "Known Traveler #" },
   { key: "driverLicense", label: "Driver License" },
   { key: "safetyExpiry", label: "Safety Expiry" },
-  { key: "twicExpiry", label: "TWIC Expiry" },
+  { key: "twicExpiry", label: "TWIC # / Expiry" },
   { key: "certification", label: "Certification" },
   { key: "utilityBill", label: "Utility Bill" },
   { key: "payRate", label: "Pay Rate" },
@@ -96,6 +126,10 @@ export function defaultAccess(role: Role, columnKey: string): ColumnAccess {
   }
   if (role === "SUPER_ADMIN" || role === "ADMIN") {
     return { level: "EDIT", canApprove: true };
+  }
+  // Travel profile: HR may view/edit, every other non-admin role is hidden.
+  if (columnKey === "dob" || columnKey === "ktn") {
+    return role === "HR" ? { level: "EDIT", canApprove: false } : { level: "HIDDEN", canApprove: false };
   }
   switch (role) {
     case "PROJECT_LEAD":
@@ -202,6 +236,51 @@ export function isAssignedProjectLeadOrManager(
   );
 }
 
+// The one employee record that belongs to an Employee-role user, matched by
+// login email (case-insensitive). Null when there is no match, or when more
+// than one record shares the email -- we never guess which person it is.
+export async function getOwnEmployeeId(me: { email: string }): Promise<string | null> {
+  const rows = await prisma.employee.findMany({
+    where: { email: { equals: me.email, mode: "insensitive" } },
+    select: { id: true },
+    take: 2,
+  });
+  return rows.length === 1 ? rows[0].id : null;
+}
+
+// Which employee rows a user may list (Onboarding page). Same rule the data
+// grid applies in memory:
+//   Employee -> only their own record (see getOwnEmployeeId), nothing else
+//   Project Lead / Project Manager -> only employees they are assigned to
+//     (as either PL or PM) or whose onboarding link they created
+//   non-admin with Site Access rows -> only employees at those sites
+//   Admin / Super Admin -> everyone
+// Both limits stack (a PL/PM with sites must match both).
+export async function employeeRowScopeWhere(me: {
+  id: string;
+  role: string;
+  email: string;
+}): Promise<Prisma.EmployeeWhereInput> {
+  if (isAdminRole(me.role)) return {};
+  if (me.role === "EMPLOYEE") {
+    const ownId = await getOwnEmployeeId(me);
+    return ownId ? { id: ownId } : { id: { in: [] } };
+  }
+  const and: Prisma.EmployeeWhereInput[] = [];
+  if (me.role === "PROJECT_LEAD" || me.role === "PROJECT_MANAGER") {
+    and.push({
+      OR: [
+        { projectLeadEmail: { equals: me.email, mode: "insensitive" } },
+        { projectManagerEmail: { equals: me.email, mode: "insensitive" } },
+        { createdById: me.id },
+      ],
+    });
+  }
+  const sites = await getRestrictedSites(me.id);
+  if (sites) and.push({ site: { in: [...sites] } });
+  return and.length > 0 ? { AND: and } : {};
+}
+
 // A one-off grant (Admin-only, EmployeeDocumentGrant table) letting a
 // specific user view/download one employee's documents regardless of role.
 // View/download only -- never implies edit rights.
@@ -303,4 +382,37 @@ export async function getNavAccess(role: string): Promise<NavAccessMap> {
 // if a role has been configured with no visible sections at all.
 export function firstAllowedNavHref(nav: NavAccessMap): string {
   return NAV_ITEMS.find((item) => nav[item.key])?.href ?? "/login";
+}
+
+// ---- Roles table (built-in roles + roles added from the Users page) ----
+
+export type RoleOption = { key: string; label: string; status: string; builtIn: boolean };
+
+// All roles: the 9 built-in ones first (in ROLES order), then added roles by
+// creation date. If the roles table isn't there yet (migration not run), it
+// falls back to the built-in list so nothing breaks.
+export async function getRoleOptions(opts: { activeOnly?: boolean } = {}): Promise<RoleOption[]> {
+  const builtIn = new Set<string>(ROLES);
+  let rows: { key: string; roleName: string; status: string }[] = [];
+  try {
+    rows = await prisma.role.findMany({ orderBy: { createdAt: "asc" } });
+  } catch {
+    rows = [];
+  }
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  const list: RoleOption[] = ROLES.map((k) => {
+    const r = byKey.get(k);
+    return { key: k, label: r?.roleName ?? ROLE_LABELS[k], status: r?.status ?? "ACTIVE", builtIn: true };
+  });
+  for (const r of rows) {
+    if (!builtIn.has(r.key)) list.push({ key: r.key, label: r.roleName, status: r.status, builtIn: false });
+  }
+  return opts.activeOnly ? list.filter((r) => r.status === "ACTIVE") : list;
+}
+
+// True when `role` is a built-in role or a role in the roles table.
+// activeOnly: only roles that can be assigned right now.
+export async function isValidRole(role: string, opts: { activeOnly?: boolean } = {}): Promise<boolean> {
+  const roles = await getRoleOptions(opts);
+  return roles.some((r) => r.key === role);
 }

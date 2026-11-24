@@ -20,10 +20,10 @@ export default function AddressCell({ id, addr }: { id: string; addr: Addr }) {
     }
   };
   const cls =
-    "rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none";
+    "rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] hover:border-white/10 focus:border-sky-400/60 focus:bg-[#0a1426] focus:outline-none";
 
   return (
-    <form action={setEmployeeField} className="flex flex-col gap-1">
+    <form action={setEmployeeField} className="flex items-center gap-1">
       <input type="hidden" name="employeeId" value={id} />
       <input type="hidden" name="column" value="address" />
       <input
@@ -32,9 +32,8 @@ export default function AddressCell({ id, addr }: { id: string; addr: Addr }) {
         placeholder="Address line 1"
         onBlur={onBlur}
         onKeyDown={onKeyDown}
-        className={`w-48 ${cls}`}
+        className={`w-40 ${cls}`}
       />
-      <div className="flex gap-1">
         <input
           name="city"
           defaultValue={addr.city ?? ""}
@@ -59,7 +58,6 @@ export default function AddressCell({ id, addr }: { id: string; addr: Addr }) {
           onKeyDown={onKeyDown}
           className={`w-16 ${cls}`}
         />
-      </div>
     </form>
   );
 }

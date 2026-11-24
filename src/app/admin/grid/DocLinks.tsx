@@ -72,7 +72,7 @@ function DocRow({
           onKeyDown={(e) => {
             if (e.key === "Escape") setRenaming(false);
           }}
-          className="w-28 rounded border border-cyan-400 bg-slate-800 px-1 py-0.5 text-xs text-white focus:outline-none"
+          className="w-28 rounded border border-sky-400/60 bg-[#0a1426] px-1 py-0.5 text-xs text-white focus:outline-none"
         />
       </form>
     );
@@ -83,7 +83,7 @@ function DocRow({
       <PinUnlockLink
         href={`/api/files/${doc.id}`}
         scope="file"
-        className="text-cyan-400 hover:underline"
+        className="text-sky-300 hover:text-sky-200 hover:underline"
         title={doc.fileName}
       >
         {displayName}
@@ -94,7 +94,7 @@ function DocRow({
             type="button"
             onClick={() => setRenaming(true)}
             title="Rename"
-            className="text-xs text-slate-500 hover:text-cyan-400"
+            className="text-xs text-slate-500 hover:text-sky-300"
           >
             ✎
           </button>

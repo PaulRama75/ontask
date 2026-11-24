@@ -11,6 +11,7 @@ import {
   getNavAccess,
   firstAllowedNavHref,
   getRestrictedSites,
+  getOwnEmployeeId,
   isAssignedProjectLeadOrManager,
 } from "@/lib/rbac";
 import { setApproved, setHrReviewed, setActive, setArchived } from "../actions";
@@ -32,6 +33,7 @@ import SecretEditCell from "./SecretEditCell";
 import StatusPill from "../StatusPill";
 import { maskSsn, maskLast4, safeDecrypt } from "@/lib/crypto";
 import { formatCurrency } from "@/lib/currency";
+import InvoicesPager from "../invoices/InvoicesPager";
 
 export const dynamic = "force-dynamic";
 
@@ -124,8 +126,15 @@ export default async function GridPage({
   // to. Every other role sees all rows (limited to the columns their access
   // allows). Applied before counts/duplicate detection so nothing about other
   // people's rows leaks.
+  // Employees only ever see their own record (matched by login email).
   const rowScoped = me.role === "PROJECT_LEAD" || me.role === "PROJECT_MANAGER";
-  const all = rowScoped ? everyone.filter((e) => isAssignedProjectLeadOrManager(meAuth, e)) : everyone;
+  const ownEmployeeId = me.role === "EMPLOYEE" ? await getOwnEmployeeId(me) : null;
+  const all =
+    me.role === "EMPLOYEE"
+      ? everyone.filter((e) => e.id === ownEmployeeId)
+      : rowScoped
+        ? everyone.filter((e) => isAssignedProjectLeadOrManager(meAuth, e))
+        : everyone;
 
   // Detected across the full unfiltered set so a duplicate's badge still
   // shows even when its match got filtered out of view (e.g. different site).
@@ -215,6 +224,8 @@ export default async function GridPage({
     "email",
     "phone",
     "ssn",
+    "dob",
+    "ktn",
     "driverLicense",
     "safetyExpiry",
     "twicExpiry",
@@ -232,9 +243,14 @@ export default async function GridPage({
   const visibleCount =
     gridCols.filter(show).length + (show("payRate") ? 1 : 0) + (show("billRate") ? 1 : 0);
 
+  // Same royal/compact look as the Invoices and Users pages (display only).
+  const cardClass =
+    "rounded-xl border border-sky-400/15 bg-gradient-to-b from-[#0f1d36]/95 to-[#0b1529]/95 shadow-xl shadow-black/40 ring-1 ring-white/[0.03] backdrop-blur";
+  const chip =
+    "flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-[#0a1426] px-2.5 text-[11px] uppercase tracking-wider text-slate-400";
   const th =
-    "sticky top-0 z-10 border border-white/10 bg-slate-900 px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 whitespace-nowrap shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
-  const td = "border border-white/10 px-2 py-1.5 align-top text-slate-200";
+    "sticky top-0 z-10 whitespace-nowrap border-b border-r border-white/[0.07] bg-[#0d1a31] px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-sky-300/90 shadow-[0_1px_0_rgba(255,255,255,0.08)]";
+  const td = "border-b border-r border-white/[0.06] px-2 py-1 align-middle text-[13px] text-slate-300";
   // Frozen first (Employee) column. The body cell needs an OPAQUE background so
   // horizontally-scrolled cells don't bleed through, and explicit z-index so it
   // sits above the scrolling body but below the sticky header. z-layering:
@@ -243,8 +259,10 @@ export default async function GridPage({
   //   frozen body cell           z-10  — above scrolling body, below header
   // The right-edge shadow signals the freeze on horizontal scroll.
   const freezeShadow = "shadow-[2px_0_6px_-2px_rgba(0,0,0,0.6)]";
-  const thFrozen = `${th} sticky left-0 z-30 bg-slate-900/95 ${freezeShadow}`;
+  const thFrozen = `${th} sticky left-0 z-30 bg-[#0d1a31] ${freezeShadow}`;
   const tdFrozenBase = `${td} sticky left-0 z-10 ${freezeShadow}`;
+  // Document columns: attachment links and the attach buttons share one line.
+  const docRow = "mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5";
 
   // Build every visible cell for one employee row ONCE so the wide table and
   // the stacked mobile card consume identical content (same cell components,
@@ -269,7 +287,7 @@ export default async function GridPage({
             canOpenLibrary={canOpenDetailsFor(e)}
           />
         ) : canOpenDetailsFor(e) ? (
-          <Link href={`/admin/employee/${e.id}`} className="text-cyan-400 hover:underline">
+          <Link href={`/admin/employee/${e.id}`} className="font-semibold text-sky-300 hover:text-sky-200 hover:underline">
             {name}
           </Link>
         ) : (
@@ -288,7 +306,7 @@ export default async function GridPage({
             href={`/api/documents-export/${e.id}`}
             scope="export"
             title={`Download ${name}'s documents`}
-            className="ml-1 text-xs font-normal text-slate-500 hover:text-cyan-400"
+            className="ml-1 text-xs font-normal text-slate-500 hover:text-sky-300"
           >
             ⬇
           </PinUnlockLink>
@@ -303,8 +321,8 @@ export default async function GridPage({
         confirmMessage={e.active ? "Deactivate this employee?" : "Activate this employee?"}
         className={
           e.active
-            ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-            : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-600"
+            ? "rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25"
+            : "rounded-md bg-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-slate-600"
         }
       >
         {e.active ? "Active" : "Inactive"}
@@ -313,8 +331,8 @@ export default async function GridPage({
       <span
         className={
           e.active
-            ? "rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300"
-            : "rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-slate-300"
+            ? "rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
+            : "rounded-md bg-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-300"
         }
       >
         {e.active ? "Active" : "Inactive"}
@@ -353,7 +371,7 @@ export default async function GridPage({
       editable("email") ? (
         <EditableCell id={e.id} column="email" value={e.email} type="email" width="w-44" />
       ) : e.email ? (
-        <a href={`mailto:${e.email}`} className="text-cyan-400 hover:underline">
+        <a href={`mailto:${e.email}`} className="text-sky-300 hover:text-sky-200 hover:underline">
           {e.email}
         </a>
       ) : (
@@ -372,6 +390,36 @@ export default async function GridPage({
         <SecretEditCell employeeId={e.id} maskedValue={maskSsn(safeDecrypt(e.ssn))} field="ssn" label="SSN" canReveal={show("ssn")} />
       ) : (
         <SecretField maskedValue={maskSsn(safeDecrypt(e.ssn))} employeeId={e.id} field="ssn" label="SSN" canReveal={show("ssn")} />
+      ),
+    );
+    push(
+      "dob",
+      "Date of Birth",
+      editable("dob") ? (
+        <EditableCell id={e.id} column="dob" value={dateInputValue(e.dateOfBirth)} type="date" width="w-36" />
+      ) : (
+        <span>{fmtDate(e.dateOfBirth)}</span>
+      ),
+    );
+    push(
+      "ktn",
+      "Known Traveler #",
+      editable("ktn") ? (
+        <SecretEditCell
+          employeeId={e.id}
+          maskedValue={maskLast4(safeDecrypt(e.knownTravelerNumber))}
+          field="ktn"
+          label="Known Traveler #"
+          canReveal={show("ktn")}
+        />
+      ) : (
+        <SecretField
+          maskedValue={maskLast4(safeDecrypt(e.knownTravelerNumber))}
+          employeeId={e.id}
+          field="ktn"
+          label="Known Traveler #"
+          canReveal={show("ktn")}
+        />
       ),
     );
     push(
@@ -395,8 +443,10 @@ export default async function GridPage({
             canReveal={show("driverLicense")}
           />
         )}
-        <DocLinks employeeId={e.id} docs={e.documents} category="LICENSE" canManage={canManageDocs} />
-        {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}
+        <div className={docRow}>
+          <DocLinks employeeId={e.id} docs={e.documents} category="LICENSE" canManage={canManageDocs} />
+          {editable("driverLicense") && <UploadCell id={e.id} column="driverLicense" />}
+        </div>
       </>,
     );
     push(
@@ -408,21 +458,42 @@ export default async function GridPage({
         ) : (
           <div>{fmtDate(e.safetyCouncilExpiry)}</div>
         )}
-        <DocLinks employeeId={e.id} docs={e.documents} category="SAFETY_COUNCIL" canManage={canManageDocs} />
-        {editable("safetyExpiry") && <UploadCell id={e.id} column="safetyExpiry" />}
+        <div className={docRow}>
+          <DocLinks employeeId={e.id} docs={e.documents} category="SAFETY_COUNCIL" canManage={canManageDocs} />
+          {editable("safetyExpiry") && <UploadCell id={e.id} column="safetyExpiry" />}
+        </div>
       </>,
     );
     push(
       "twicExpiry",
-      "TWIC Expiry",
+      "TWIC # / Expiry",
       <>
+        {editable("twicExpiry") ? (
+          <SecretEditCell
+            employeeId={e.id}
+            maskedValue={maskLast4(safeDecrypt(e.twicNumber))}
+            field="twic"
+            label="TWIC #"
+            canReveal={show("twicExpiry")}
+          />
+        ) : (
+          <SecretField
+            maskedValue={maskLast4(safeDecrypt(e.twicNumber))}
+            employeeId={e.id}
+            field="twic"
+            label="TWIC #"
+            canReveal={show("twicExpiry")}
+          />
+        )}
         {editable("twicExpiry") ? (
           <EditableCell id={e.id} column="twicExpiry" value={dateInputValue(e.twicExpiry)} type="date" width="w-36" />
         ) : (
           <div>{fmtDate(e.twicExpiry)}</div>
         )}
-        <DocLinks employeeId={e.id} docs={e.documents} category="TWIC" canManage={canManageDocs} />
-        {editable("twicExpiry") && <UploadCell id={e.id} column="twicExpiry" />}
+        <div className={docRow}>
+          <DocLinks employeeId={e.id} docs={e.documents} category="TWIC" canManage={canManageDocs} />
+          {editable("twicExpiry") && <UploadCell id={e.id} column="twicExpiry" />}
+        </div>
       </>,
     );
     push(
@@ -430,16 +501,20 @@ export default async function GridPage({
       "Certification",
       <>
         <div className="text-xs text-slate-400">{certNames}</div>
-        <DocLinks employeeId={e.id} docs={e.documents} category="CERTIFICATION" canManage={canManageDocs} />
-        {editable("certification") && <UploadCell id={e.id} column="certification" certNames={e.certifications.map((c) => c.name)} />}
+        <div className={docRow}>
+          <DocLinks employeeId={e.id} docs={e.documents} category="CERTIFICATION" canManage={canManageDocs} />
+          {editable("certification") && <UploadCell id={e.id} column="certification" certNames={e.certifications.map((c) => c.name)} />}
+        </div>
       </>,
     );
     push(
       "utilityBill",
       "Utility Bill",
       <>
-        <DocLinks employeeId={e.id} docs={e.documents} category="UTILITY_BILL" canManage={canManageDocs} />
-        {editable("utilityBill") && <UploadCell id={e.id} column="utilityBill" />}
+        <div className={docRow}>
+          <DocLinks employeeId={e.id} docs={e.documents} category="UTILITY_BILL" canManage={canManageDocs} />
+          {editable("utilityBill") && <UploadCell id={e.id} column="utilityBill" />}
+        </div>
       </>,
     );
     push(
@@ -494,8 +569,8 @@ export default async function GridPage({
             type="submit"
             className={
               e.hrReviewed
-                ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
-                : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+                ? "rounded-md bg-emerald-500 px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-400"
+                : "rounded-md border border-white/10 px-2.5 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-white/5"
             }
           >
             {e.hrReviewed ? "Reviewed ✓" : "Mark reviewed"}
@@ -505,8 +580,8 @@ export default async function GridPage({
         <span
           className={
             e.hrReviewed
-              ? "rounded-md bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
-              : "rounded-md bg-white/5 px-3 py-1 text-xs font-medium text-slate-400"
+              ? "rounded-md bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300"
+              : "rounded-md bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-400"
           }
         >
           {e.hrReviewed ? "Reviewed ✓" : "Pending"}
@@ -524,8 +599,8 @@ export default async function GridPage({
             type="submit"
             className={
               e.approved
-                ? "rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-400"
-                : "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+                ? "rounded-md bg-emerald-500 px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-400"
+                : "rounded-md border border-white/10 px-2.5 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-white/5"
             }
           >
             {e.approved ? "Approved ✓" : "Approve"}
@@ -548,14 +623,14 @@ export default async function GridPage({
           confirmMessage={e.archived ? "Unarchive this employee?" : "Archive this employee?"}
           className={
             e.archived
-              ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
-              : "rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/5"
+              ? "rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25"
+              : "rounded-md border border-white/10 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-white/5"
           }
         >
           {e.archived ? "Unarchive" : "Archive"}
         </PinConfirmButton>
       ) : (
-        <span className={e.archived ? "rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-300" : "text-slate-500"}>
+        <span className={e.archived ? "rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300" : "text-slate-500"}>
           {e.archived ? "Archived" : "—"}
         </span>
       ),
@@ -564,32 +639,69 @@ export default async function GridPage({
     return { nameNode, cells, isDuplicate, name };
   }
 
+  // Display-only counts for the header stat chips (same archived view as the
+  // "x of y employees" total below).
+  const inView = all.filter((e) => e.archived === showArchived);
+  const activeCount = inView.filter((e) => e.active).length;
+  const approvedCount = inView.filter((e) => e.approved).length;
+  const pendingCount = inView.length - approvedCount;
+  const missingDocsCount = inView.filter((e) => e.documents.length === 0).length;
+
   return (
-    <main className="min-h-screen py-8">
-      <div className="mx-auto max-w-[1400px] px-4">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Employee Data Grid</h1>
-            <p className="text-sm text-slate-400">
-              All employees with document attachments and approval status.
-            </p>
+    <main className="mx-auto max-w-[1400px] px-4 py-2">
+      <section className={cardClass}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-blue-600/30">
+              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><rect x="2.5" y="3.5" width="15" height="13" rx="1.5" /><path d="M2.5 8h15M2.5 12.5h15M8 3.5v13" /></svg>
+            </span>
+            <div>
+              <h1 className="text-sm font-bold uppercase tracking-[0.12em] text-white">Employee Data Grid</h1>
+              <p className="text-[11px] text-slate-400">All employees with document attachments and approval status.</p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-1 flex-wrap items-center justify-center gap-2">
+            <span className="flex h-8 items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-500/10 px-2.5 text-[11px] uppercase tracking-wider text-sky-200 shadow-inner shadow-sky-500/10">
+              Total <span className="text-base font-bold text-white">{inView.length}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow shadow-emerald-400/60" />
+              Active <span className="text-base font-bold text-white">{activeCount}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-teal-300 shadow shadow-teal-300/60" />
+              Approved <span className="text-base font-bold text-white">{approvedCount}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-amber-400 shadow shadow-amber-400/60" />
+              Pending <span className="text-base font-bold text-white">{pendingCount}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-rose-400 shadow shadow-rose-400/60" />
+              No docs <span className="text-base font-bold text-white">{missingDocsCount}</span>
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin"
+              className="flex h-8 items-center rounded-lg border border-sky-400/25 bg-sky-400/[0.06] px-3 text-xs font-medium text-sky-200 transition-colors hover:bg-sky-400/15"
+            >
+              ← Admin home
+            </Link>
             {canLibrary && (
               <PinUnlockLink
                 href="/api/documents-export"
                 scope="export"
-                className="text-sm text-cyan-400 hover:underline"
+                className="flex h-8 items-center rounded-lg bg-gradient-to-b from-sky-500 to-blue-600 px-3 text-xs font-semibold text-white shadow-lg shadow-blue-900/50 transition-colors hover:from-sky-400 hover:to-blue-500"
               >
-                Download all documents
+                ⬇ Download all documents
               </PinUnlockLink>
             )}
-            <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
-              ← Admin home
-            </Link>
           </div>
         </div>
+      </section>
 
+      <section className={`mt-2 overflow-hidden ${cardClass}`}>
         <GridControls
           total={all.filter((e) => e.archived === showArchived).length}
           shown={employees.length}
@@ -598,12 +710,14 @@ export default async function GridPage({
           archivedCount={all.filter((e) => e.archived).length}
         />
 
-        {/* Data table (all screen sizes). The Employee column is frozen on
-            horizontal scroll and the header stays sticky on vertical scroll;
-            the box scrolls horizontally on narrow screens. */}
-        <div className="max-h-[75vh] overflow-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-20 bg-slate-900/95">
+        {/* Data table. The Employee column is frozen on horizontal scroll and
+            the header stays sticky on vertical scroll; the pager shows one
+            page of the already-rendered rows at a time. */}
+        {/* Table height = window minus nav, header card, filters and pager,
+            so the whole page fits one screen with no window scrollbar. */}
+        <InvoicesPager heightClass="max-h-[70vh] lg:max-h-[calc(100vh-330px)] xl:max-h-[calc(100vh-282px)]">
+          <table className="w-full border-separate border-spacing-0 text-[13px]">
+            <thead className="sticky top-0 z-20 bg-[#0d1a31]">
               <tr>
                 {show("name") && (
                   <th className={thFrozen}>
@@ -613,7 +727,7 @@ export default async function GridPage({
                       className="flex items-center gap-1 hover:text-white"
                     >
                       Employee
-                      <span className={sortByName ? "text-cyan-400" : "text-slate-600"}>
+                      <span className={sortByName ? "text-sky-200" : "text-slate-600"}>
                         {sortByName ? (nameDir === "asc" ? "▲" : "▼") : "▲▼"}
                       </span>
                     </Link>
@@ -625,9 +739,11 @@ export default async function GridPage({
                 {show("email") && <th className={th}>Email</th>}
                 {show("phone") && <th className={th}>Phone</th>}
                 {show("ssn") && <th className={th}>SS#</th>}
+                {show("dob") && <th className={th}>Date of Birth</th>}
+                {show("ktn") && <th className={th}>Known Traveler #</th>}
                 {show("driverLicense") && <th className={th}>Driver License</th>}
                 {show("safetyExpiry") && <th className={th}>Safety Expiry</th>}
-                {show("twicExpiry") && <th className={th}>TWIC Expiry</th>}
+                {show("twicExpiry") && <th className={th}>TWIC # / Expiry</th>}
                 {show("certification") && <th className={th}>Certification</th>}
                 {show("utilityBill") && <th className={th}>Utility Bill</th>}
                 {show("payRate") && <th className={th}>Pay Rate</th>}
@@ -645,7 +761,7 @@ export default async function GridPage({
             <tbody>
               {employees.length === 0 && (
                 <tr>
-                  <td className={`${td} text-center text-slate-500`} colSpan={visibleCount || 1}>
+                  <td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={visibleCount || 1}>
                     {all.length === 0 ? "No employees yet." : "No employees match your search/filter."}
                   </td>
                 </tr>
@@ -654,13 +770,19 @@ export default async function GridPage({
                 const { nameNode, cells } = buildRow(e);
                 // The frozen body cell carries an OPAQUE background so scrolled
                 // content can't bleed through; the approved-row highlight that
-                // the <tr>'s bg-emerald-500/10 would normally show is instead
+                // the <tr>'s emerald tint would normally show is instead
                 // rendered on this opaque cell via an inset ring token (FEAT-003).
-                const frozenBg = e.approved ? "bg-slate-900 ring-inset ring-1 ring-emerald-500/30" : "bg-slate-900";
+                const frozenBg = e.approved
+                  ? "bg-[#0c1b2e] ring-inset ring-1 ring-emerald-500/25 group-hover:bg-[#10223a]"
+                  : "bg-[#0c182d] group-hover:bg-[#10203a]";
                 return (
-                  <tr key={e.id} className={e.approved ? "bg-emerald-500/10" : ""}>
+                  <tr
+                    key={e.id}
+                    data-row
+                    className={`group transition-colors hover:bg-sky-400/[0.05] ${e.approved ? "bg-emerald-500/[0.06]" : ""}`}
+                  >
                     {show("name") && (
-                      <td className={`${tdFrozenBase} ${frozenBg} whitespace-nowrap font-medium`}>{nameNode}</td>
+                      <td className={`${tdFrozenBase} ${frozenBg} whitespace-nowrap font-medium text-white`}>{nameNode}</td>
                     )}
                     {cells.map((c) => (
                       <td key={c.key} className={td}>
@@ -672,9 +794,8 @@ export default async function GridPage({
               })}
             </tbody>
           </table>
-        </div>
-
-      </div>
+        </InvoicesPager>
+      </section>
     </main>
   );
 }

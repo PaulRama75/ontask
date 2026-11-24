@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
 import { submitTravelRequest } from "./actions";
+import { safeDecrypt } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,22 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
     : null;
   const name = [e.firstName, e.lastName].filter(Boolean).join(" ");
 
+  // Traveler details: the employee record first (saved by earlier requests),
+  // falling back to this employee's most recent travel request so requests
+  // made before these fields existed still pre-fill.
+  const last = await prisma.travelRequest.findFirst({
+    where: { employeeId: e.id },
+    orderBy: { createdAt: "desc" },
+    select: { dateOfBirth: true, knownTravelerNumber: true, phone: true, email: true },
+  });
+  const dob = e.dateOfBirth ?? last?.dateOfBirth ?? null;
+  const prefill = {
+    dateOfBirth: dob ? dob.toISOString().slice(0, 10) : "",
+    knownTravelerNumber: safeDecrypt(e.knownTravelerNumber) ?? last?.knownTravelerNumber ?? "",
+    phone: e.phone ?? last?.phone ?? "",
+    email: e.email ?? last?.email ?? "",
+  };
+
   return (
     <main className="min-h-screen py-10">
       <div className="mx-auto max-w-3xl px-4">
@@ -98,19 +115,19 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
                 <input name="fullName" defaultValue={name} required className={inputCls} />
               </Field>
               <Field label="Date of Birth">
-                <input type="date" name="dateOfBirth" className={inputCls} />
+                <input type="date" name="dateOfBirth" defaultValue={prefill.dateOfBirth} className={inputCls} />
               </Field>
               <Field label="Gender">
                 <Choice name="gender" options={["Male", "Female"]} />
               </Field>
               <Field label="Known Traveler # (if applicable)">
-                <input name="knownTravelerNumber" className={inputCls} />
+                <input name="knownTravelerNumber" defaultValue={prefill.knownTravelerNumber} autoComplete="off" className={inputCls} />
               </Field>
               <Field label="Phone Number">
-                <input name="phone" defaultValue={e.phone ?? ""} className={inputCls} />
+                <input name="phone" defaultValue={prefill.phone} className={inputCls} />
               </Field>
               <Field label="Email Address">
-                <input type="email" name="email" defaultValue={e.email ?? ""} className={inputCls} />
+                <input type="email" name="email" defaultValue={prefill.email} className={inputCls} />
               </Field>
             </div>
           </div>
