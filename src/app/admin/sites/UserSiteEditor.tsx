@@ -46,8 +46,8 @@ export default function UserSiteEditor({
   const restricted = selected.size > 0;
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">
+    <form onSubmit={onSubmit} className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {allSites.map((site) => {
           const on = selected.has(site);
           return (
@@ -55,36 +55,42 @@ export default function UserSiteEditor({
               key={site}
               className={
                 on
-                  ? "cursor-pointer rounded-md border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-300"
-                  : "cursor-pointer rounded-md border border-white/10 bg-slate-900/60 px-2 py-1 text-xs text-slate-300 hover:bg-white/5"
+                  ? "flex cursor-pointer items-center gap-1 rounded-md border border-sky-400/50 bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-medium text-sky-100 shadow-inner shadow-sky-500/10 transition-colors"
+                  : "flex cursor-pointer items-center gap-1 rounded-md border border-white/10 bg-[#0a1426] px-1.5 py-0.5 text-[11px] text-slate-300 transition-colors hover:border-sky-400/40 hover:text-white"
               }
             >
               <input
                 type="checkbox"
                 checked={on}
                 onChange={(ev) => toggle(site, ev.target.checked)}
-                className="mr-1 align-middle"
+                className="h-3 w-3 accent-sky-500"
               />
               {site}
             </label>
           );
         })}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60"
+          className="flex h-6 items-center rounded-md bg-gradient-to-b from-sky-500 to-blue-600 px-2.5 text-[11px] font-semibold text-white shadow shadow-blue-900/50 transition-colors hover:from-sky-400 hover:to-blue-500 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save"}
         </button>
-        <span className="text-xs text-slate-400">
+        <span
+          className={
+            restricted
+              ? "rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-300"
+              : "rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300"
+          }
+        >
           {restricted
             ? `Restricted to ${selected.size} site${selected.size === 1 ? "" : "s"}`
             : "Unrestricted (all sites)"}
         </span>
-        {saved && <span className="text-xs text-emerald-400">Saved.</span>}
-        {error && <span className="text-xs text-rose-400">{error}</span>}
+        {saved && <span className="text-[11px] text-emerald-400">Saved.</span>}
+        {error && <span className="text-[11px] text-rose-400">{error}</span>}
       </div>
     </form>
   );

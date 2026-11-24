@@ -6,7 +6,7 @@ import { saveFile, deleteFile } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 import { getCurrentUser } from "@/lib/auth";
-import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager } from "@/lib/rbac";
+import { getAccessMap, canEdit, canApprove, isAdminRole, isAssignedProjectLeadOrManager, getOwnEmployeeId } from "@/lib/rbac";
 import { notifyFlagTransitions, notifyProjectLeadDetailsSaved } from "@/lib/notifications";
 import { requirePin } from "@/lib/auth";
 import { encSsn, encField } from "@/lib/crypto";
@@ -42,6 +42,8 @@ const COLUMN_CATEGORY: Record<string, string> = {
 export async function createOnboardingLink(form: FormData): Promise<void> {
   const me = await getCurrentUser();
   if (!me) throw new Error("Not authenticated");
+  // Employees can't create onboarding links (new employee records + emails).
+  if (me.role === "EMPLOYEE") throw new Error("Not authorized");
 
   const firstName = String(form.get("firstName") ?? "").trim() || null;
   const lastName = String(form.get("lastName") ?? "").trim() || null;
@@ -106,6 +108,12 @@ async function requireColumn(
     if (!e || !isAssignedProjectLeadOrManager(me, e)) {
       throw new Error("Not authorized for this employee");
     }
+  }
+
+  // An Employee may only change their own record, whatever columns they
+  // were given EDIT on.
+  if (me.role === "EMPLOYEE" && (!employeeId || employeeId !== (await getOwnEmployeeId(me)))) {
+    throw new Error("Not authorized for this employee");
   }
 }
 
@@ -243,6 +251,9 @@ export async function setEmployeeField(formData: FormData): Promise<void> {
     case "phone":
       data = { phone: orNull(str("value")) };
       break;
+    case "dob":
+      data = { dateOfBirth: dateOrNull(str("value")) };
+      break;
     case "ssn": {
       // The grid routes SSN edits through the dedicated, PIN-gated
       // setEmployeeSsn action; this branch is not the grid's write path but
@@ -352,6 +363,56 @@ export async function setEmployeeDriversLicense(formData: FormData): Promise<Gat
   }
 
   const data = clear ? { driversLicenseNumber: null } : { driversLicenseNumber: encField(value) };
+  await prisma.employee.update({ where: { id }, data });
+  revalidatePath("/admin/grid");
+  return { ok: true };
+}
+
+// Dedicated, PIN-gated write for the Known Traveler # column -- same shape as
+// setEmployeeDriversLicense: empty submit = no-op, clear="1" nulls it, a
+// non-empty value is encrypted at rest via encField.
+export async function setEmployeeKtn(formData: FormData): Promise<GatedResult> {
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("ktn", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
+
+  const value = String(formData.get("value") ?? "").trim();
+  const clear = String(formData.get("clear") ?? "") === "1";
+  if (!clear && value === "") return { ok: true };
+
+  const data = clear ? { knownTravelerNumber: null } : { knownTravelerNumber: encField(value) };
+  await prisma.employee.update({ where: { id }, data });
+  revalidatePath("/admin/grid");
+  return { ok: true };
+}
+
+// Dedicated, PIN-gated write for the TWIC card number -- same shape as
+// setEmployeeKtn. It shares the "twicExpiry" access key (the TWIC cell on the
+// grid holds both the number and the expiry date), so whoever may edit the
+// TWIC cell may edit the number. Empty submit = no-op, clear="1" nulls it, a
+// non-empty value is encrypted at rest via encField.
+export async function setEmployeeTwicNumber(formData: FormData): Promise<GatedResult> {
+  const id = String(formData.get("employeeId") ?? "");
+  if (!id) return { ok: false, error: "Not authorized" };
+  try {
+    await requireColumn("twicExpiry", "edit", id);
+  } catch {
+    return { ok: false, error: "Not authorized" };
+  }
+  const pinFail = await checkPin(formData);
+  if (pinFail) return pinFail;
+
+  const value = String(formData.get("value") ?? "").trim();
+  const clear = String(formData.get("clear") ?? "") === "1";
+  if (!clear && value === "") return { ok: true };
+
+  const data = clear ? { twicNumber: null } : { twicNumber: encField(value) };
   await prisma.employee.update({ where: { id }, data });
   revalidatePath("/admin/grid");
   return { ok: true };
@@ -518,6 +579,15 @@ export async function saveProjectLeadDetails(formData: FormData): Promise<void> 
   });
   if (!employee) return;
   const assignedToMe = isAssignedProjectLeadOrManager(me, employee);
+  // Project Leads/Managers may only change employees on their own team --
+  // same scope as every other grid edit (see requireColumn).
+  if ((me.role === "PROJECT_LEAD" || me.role === "PROJECT_MANAGER") && !assignedToMe) {
+    throw new Error("Not authorized for this employee");
+  }
+  // An Employee may only change their own record.
+  if (me.role === "EMPLOYEE" && id !== (await getOwnEmployeeId(me))) {
+    throw new Error("Not authorized for this employee");
+  }
   const editable = (key: string) => canEdit(access, key) || assignedToMe;
 
   const s = (k: string) => String(formData.get(k) ?? "").trim();

@@ -38,7 +38,7 @@ export default function DocRow({
             onKeyDown={(e) => {
               if (e.key === "Escape") setRenaming(false);
             }}
-            className="w-64 rounded border border-cyan-400 bg-slate-800 px-2 py-0.5 text-sm text-white focus:outline-none"
+            className="w-full max-w-64 rounded-lg border border-sky-400/60 bg-[#0a1426] px-2 py-0.5 text-xs text-white focus:outline-none"
           />
         </form>
       </li>
@@ -46,23 +46,23 @@ export default function DocRow({
   }
 
   return (
-    <li className="flex items-center gap-2">
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <PinUnlockLink
         href={`/api/files/${doc.id}`}
         scope="file"
         title={doc.fileName}
-        className="text-sm text-cyan-400 hover:underline"
+        className="min-w-0 break-all text-xs text-sky-300 hover:text-sky-200 hover:underline"
       >
         {displayName}
       </PinUnlockLink>
-      <span className="text-xs text-slate-500">{(doc.size / 1024).toFixed(0)} KB</span>
+      <span className="text-[11px] text-slate-500">{(doc.size / 1024).toFixed(0)} KB</span>
       {canManage && (
         <>
           <button
             type="button"
             onClick={() => setRenaming(true)}
             title="Rename"
-            className="text-xs text-slate-500 hover:text-cyan-400"
+            className="text-[11px] text-slate-500 hover:text-sky-300"
           >
             ✎ Rename
           </button>
@@ -70,7 +70,7 @@ export default function DocRow({
             action={deleteEmployeeDocument}
             fields={{ documentId: doc.id, employeeId }}
             confirmMessage={`Delete "${doc.fileName}"? This can't be undone.`}
-            className="text-xs text-rose-400 hover:text-rose-300"
+            className="text-[11px] text-rose-400 hover:text-rose-300"
           >
             ✕ Delete
           </PinConfirmButton>

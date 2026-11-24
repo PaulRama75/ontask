@@ -60,18 +60,24 @@ export default function InvoiceControls({
   }
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3">
-      <input
+    <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+      <div className="relative min-w-[220px] flex-1">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500">
+          <circle cx="9" cy="9" r="6" />
+          <path d="m14 14 4 4" strokeLinecap="round" />
+        </svg>
+        <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search site or client…"
-        className="w-64 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 shadow-sm focus:border-cyan-400 focus:ring-cyan-400"
+        className="h-9 w-full rounded-lg border border-white/10 bg-[#0a1426] pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none focus:ring-1 focus:ring-sky-400/40"
       />
+      </div>
 
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}
-        className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white shadow-sm focus:border-cyan-400"
+        className="h-9 rounded-lg border border-white/10 bg-[#0a1426] px-3 text-sm text-white focus:border-sky-400/60 focus:outline-none focus:ring-1 focus:ring-sky-400/40"
       >
         <option value="all">All statuses</option>
         {statusOptions.map((opt) => (
@@ -81,12 +87,12 @@ export default function InvoiceControls({
         ))}
       </select>
 
-      <label className="flex items-center gap-1.5 text-sm text-slate-400">
+      <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-[#0a1426] px-3 text-xs text-slate-300 hover:border-sky-400/40">
         <input
           type="checkbox"
           checked={showArchived}
           onChange={toggleArchived}
-          className="h-4 w-4 rounded border-white/10 bg-slate-800"
+          className="h-3.5 w-3.5 rounded border-white/10 bg-slate-800 accent-sky-500"
         />
         Show archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
       </label>
@@ -94,14 +100,14 @@ export default function InvoiceControls({
       {(q || status !== "all") && (
         <button
           onClick={clear}
-          className="rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
+          className="h-9 rounded-lg border border-white/10 px-3 text-xs text-slate-300 transition-colors hover:border-sky-400/40 hover:text-white"
         >
           Clear
         </button>
       )}
 
-      <span className="ml-auto text-sm text-slate-400">
-        {shown} of {total} invoices
+      <span className="ml-auto text-xs text-slate-400">
+        <span className="font-semibold text-white">{shown}</span> of {total} invoices
       </span>
     </div>
   );

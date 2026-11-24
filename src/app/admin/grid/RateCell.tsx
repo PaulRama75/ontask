@@ -24,11 +24,11 @@ export default function RateCell({
         <CurrencyInput
           name="value"
           defaultValue={value}
-          className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
+          className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] hover:border-white/10 focus:border-sky-400/60 focus:bg-[#0a1426] focus:outline-none"
         />
       }
       confirmMessage={`Update the ${field === "payRate" ? "pay" : "bill"} rate?`}
-      className="text-xs text-cyan-400 hover:underline"
+      className="text-xs text-sky-300 hover:text-sky-200 hover:underline"
     >
       Save
     </PinConfirmButton>

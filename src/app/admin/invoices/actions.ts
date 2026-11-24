@@ -3,7 +3,7 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, getAccessMap, canView, getRestrictedSites, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
+import { isAdminRole, getAccessMap, canView, canViewInvoice, employeeRowScopeWhere, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
 import { saveInvoiceFile, getFile } from "@/lib/storage";
 import { maskSsn, safeDecrypt } from "@/lib/crypto";
 import { sendEmail } from "@/lib/email";
@@ -33,23 +33,6 @@ async function requireAM() {
 // invoice, or any admin (admins can manage every invoice, not just their own).
 function isInvoiceOwner(me: { id: string; role: string }, invoice: { createdByUserId: string }) {
   return isAdminRole(me.role) || (isInvoiceCreatorRole(me.role) && invoice.createdByUserId === me.id);
-}
-
-// Mirrors the view-access rule on the invoice detail page: the owner, any
-// PM/PL with Site Access to this invoice's site, or an AM once it's no
-// longer a DRAFT.
-async function canViewInvoice(
-  me: { id: string; role: string },
-  invoice: { site: string; status: string; createdByUserId: string },
-): Promise<boolean> {
-  if (isInvoiceOwner(me, invoice)) return true;
-  const isPMorPL = me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD";
-  if (isPMorPL) {
-    const restrictedSites = await getRestrictedSites(me.id);
-    if (!restrictedSites || restrictedSites.has(invoice.site)) return true;
-  }
-  if (me.role === "ACCOUNT_MANAGER" && invoice.status !== "DRAFT") return true;
-  return false;
 }
 
 // Fallback client display name derived from their email when none is given,
@@ -390,7 +373,13 @@ export async function deleteInvoiceAttachment(form: FormData): Promise<GatedResu
   return { ok: true };
 }
 
-const EXPORT_KEYS = COLUMN_KEYS.filter((k) => k !== "library");
+// Travel profile (DOB / Known Traveler #) never goes into a client-facing export.
+const EXPORT_KEYS = COLUMN_KEYS.filter((k) => k !== "library" && k !== "dob" && k !== "ktn");
+
+// The grid's single TWIC cell ("twicExpiry" access key) becomes two CSV
+// columns: the masked TWIC # (last 4 only) and the expiry date.
+const EXPORT_LABELS: Record<string, string> = { twicNumber: "TWIC #", twicExpiry: "TWIC Expiry" };
+const expandExportKey = (k: string): string[] => (k === "twicExpiry" ? ["twicNumber", "twicExpiry"] : [k]);
 
 function csvField(v: string): string {
   // Prefix a leading =, +, -, or @ with a tab to prevent CSV formula injection
@@ -414,6 +403,7 @@ type ExportEmployee = {
   ssn: string | null;
   driversLicenseNumber: string | null;
   safetyCouncilExpiry: Date | null;
+  twicNumber: string | null;
   twicExpiry: Date | null;
   certifications: { name: string }[];
   payRate: number | null;
@@ -454,6 +444,9 @@ function employeeFieldValue(e: ExportEmployee, key: string): string {
       return maskSsn(safeDecrypt(e.driversLicenseNumber));
     case "safetyExpiry":
       return e.safetyCouncilExpiry ? e.safetyCouncilExpiry.toISOString().slice(0, 10) : "";
+    case "twicNumber":
+      // Encrypted at rest — only the masked last-4 goes into the CSV.
+      return maskSsn(safeDecrypt(e.twicNumber));
     case "twicExpiry":
       return e.twicExpiry ? e.twicExpiry.toISOString().slice(0, 10) : "";
     case "certification":
@@ -499,14 +492,17 @@ export async function attachGridExport(form: FormData): Promise<GatedResult> {
   if (employeeIds.length === 0) return { ok: false, error: "Select at least one employee to export." };
 
   const access = await getAccessMap(me.role);
-  const cols = EXPORT_KEYS.filter((k) => canView(access, k));
+  const cols = EXPORT_KEYS.filter((k) => canView(access, k)).flatMap(expandExportKey);
 
   const employees = await prisma.employee.findMany({
-    where: { id: { in: employeeIds }, site: invoice.site },
+    // Same team/site scope as the data grid: an id for someone outside it is
+    // silently dropped, so the CSV never carries another team's employees.
+    where: { AND: [{ id: { in: employeeIds }, site: invoice.site }, await employeeRowScopeWhere(me)] },
     include: { certifications: { select: { name: true } } },
   });
+  if (employees.length === 0) return { ok: false, error: "None of the selected employees can be exported." };
 
-  const header = cols.map((k) => csvField(COLUMNS.find((c) => c.key === k)?.label ?? k)).join(",");
+  const header = cols.map((k) => csvField(EXPORT_LABELS[k] ?? COLUMNS.find((c) => c.key === k)?.label ?? k)).join(",");
   const lines = employees.map((e) => cols.map((k) => csvField(employeeFieldValue(e, k))).join(","));
   const csv = [header, ...lines].join("\r\n");
 
@@ -819,7 +815,7 @@ export async function addInvoiceComment(form: FormData): Promise<void> {
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new Error("Invoice not found");
-  if (!(await canViewInvoice(me, invoice))) throw new Error("Not authorized");
+  if (!canViewInvoice(me, invoice)) throw new Error("Not authorized");
 
   await prisma.invoiceComment.create({
     data: {

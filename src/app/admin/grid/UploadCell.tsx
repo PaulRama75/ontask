@@ -39,7 +39,7 @@ export default function UploadCell({
   }
 
   return (
-    <form action={addEmployeeDocument} ref={formRef} className="mt-1 space-y-1">
+    <form action={addEmployeeDocument} ref={formRef} className="space-y-1">
       <input type="hidden" name="employeeId" value={id} />
       <input type="hidden" name="column" value={column} />
       {column === "certification" && (
@@ -49,7 +49,7 @@ export default function UploadCell({
             name="label"
             list={datalistId}
             placeholder="Title (e.g. OSHA 10)"
-            className="w-full rounded border border-white/10 bg-slate-800/60 px-1.5 py-0.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+            className="w-full rounded border border-white/10 bg-slate-800/60 px-1.5 py-0.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:ring-sky-400/40"
           />
           {certNames && certNames.length > 0 && (
             <datalist id={datalistId}>
@@ -72,14 +72,14 @@ export default function UploadCell({
         <button
           type="button"
           onClick={() => openPicker(false)}
-          className="text-xs text-slate-400 hover:text-cyan-400 hover:underline"
+          className="text-[11px] text-slate-400 hover:text-sky-300 hover:underline"
         >
           + Attach
         </button>
         <button
           type="button"
           onClick={() => openPicker(true)}
-          className="text-xs text-slate-400 hover:text-cyan-400 hover:underline"
+          className="text-[11px] text-slate-400 hover:text-sky-300 hover:underline"
         >
           📷 Photo
         </button>

@@ -10,10 +10,19 @@ import PinUnlockLink from "../PinUnlockLink";
 
 export const dynamic = "force-dynamic";
 
+const cardClass =
+  "rounded-xl border border-sky-400/15 bg-gradient-to-b from-[#0f1d36]/95 to-[#0b1529]/95 shadow-xl shadow-black/40 ring-1 ring-white/[0.03] backdrop-blur";
 const inputCls =
-  "rounded-md border border-white/10 bg-slate-800/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400";
-const th = "px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-400 whitespace-nowrap";
-const td = "px-2 py-1.5 text-slate-200 whitespace-nowrap";
+  "h-8 rounded-lg border border-white/10 bg-[#0a1426] px-2.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none focus:ring-1 focus:ring-sky-400/40 [color-scheme:dark]";
+const labelCls = "flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400";
+const chip =
+  "flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-[#0a1426] px-2.5 text-[11px] uppercase tracking-wider text-slate-400";
+const chipNum = "text-base font-bold normal-case tabular-nums text-white";
+const theadCls =
+  "sticky top-0 z-10 bg-[#0d1a31] text-[11px] font-bold uppercase tracking-[0.08em] text-sky-300/90 shadow-[0_1px_0_rgba(255,255,255,0.08)]";
+const th = "whitespace-nowrap px-3 py-2 text-left";
+const td = "whitespace-nowrap px-3 py-1.5 align-middle tabular-nums text-slate-300";
+const dash = <span className="text-slate-600">—</span>;
 
 function money(v: number): string {
   return `$${v.toFixed(2)}`;
@@ -73,25 +82,69 @@ export default async function TimesheetsReportPage({
   }).toString()}`;
 
   return (
-    <main className="min-h-screen py-8">
-      <div className="mx-auto max-w-[1200px] px-4">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Timesheets</h1>
-            <p className="text-sm text-slate-400">
-              Summary by employee, with day-level detail below matching the current filters.
-              {scope && " Showing only employees assigned to you."}
-            </p>
+    <main className="mx-auto max-w-[1400px] px-4 py-3">
+      {/* Header: title, stat chips, actions + filter bar */}
+      <section className={cardClass}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-blue-600/30">
+              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                <circle cx="10" cy="10" r="7.5" />
+                <path d="M10 5.5V10l3 2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div>
+              <h1 className="text-sm font-bold uppercase tracking-[0.12em] text-white">Timesheets</h1>
+              <p className="text-[11px] text-slate-400">
+                Summary by employee, with day-level detail below.
+                {scope && " Showing only employees assigned to you."}
+              </p>
+            </div>
           </div>
-          <Link href="/admin" className="text-sm text-cyan-400 hover:underline">
-            ← Admin home
-          </Link>
+
+          <div className="flex flex-1 flex-wrap items-center justify-center gap-2">
+            <span className="flex h-8 items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-500/10 px-2.5 text-[11px] uppercase tracking-wider text-sky-200 shadow-inner shadow-sky-500/10">
+              Employees <span className={chipNum}>{summary.length}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-sky-400 shadow shadow-sky-400/60" />
+              Days <span className={chipNum}>{grandTotal.days}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow shadow-emerald-400/60" />
+              ST hrs <span className={chipNum}>{grandTotal.st}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-amber-400 shadow shadow-amber-400/60" />
+              OT hrs <span className={chipNum}>{grandTotal.ot}</span>
+            </span>
+            <span className={chip}>
+              <span className="h-2 w-2 rounded-full bg-teal-300 shadow shadow-teal-300/60" />
+              Expenses <span className={chipNum}>{money(grandTotal.expenses)}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <PinUnlockLink
+              href={exportHref}
+              scope="export"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-400/[0.06] px-3 text-xs font-medium text-sky-200 transition-colors hover:bg-sky-400/15"
+            >
+              Export ({rows.length} rows)
+            </PinUnlockLink>
+            <Link
+              href="/admin"
+              className="flex h-8 items-center rounded-lg border border-white/10 px-3 text-xs text-slate-300 transition-colors hover:bg-white/5"
+            >
+              ← Admin home
+            </Link>
+          </div>
         </div>
 
-        <form className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-white/10 bg-slate-900/60 p-4 shadow-lg shadow-black/30 backdrop-blur">
-          <label className="text-xs text-slate-400">
+        <form className="flex flex-wrap items-end gap-2.5 border-t border-white/[0.06] px-3 py-2.5">
+          <label className={labelCls}>
             Employee
-            <select name="employeeId" defaultValue={employeeId ?? ""} className={`${inputCls} mt-1 block`}>
+            <select name="employeeId" defaultValue={employeeId ?? ""} className={`${inputCls} w-52`}>
               <option value="">All</option>
               {employeeOptions.map((e) => (
                 <option key={e.id} value={e.id}>
@@ -100,145 +153,159 @@ export default async function TimesheetsReportPage({
               ))}
             </select>
           </label>
-          <label className="text-xs text-slate-400">
+          <label className={labelCls}>
             From
-            <input type="date" name="from" defaultValue={fromRaw ?? ""} className={`${inputCls} mt-1 block`} />
+            <input type="date" name="from" defaultValue={fromRaw ?? ""} className={inputCls} />
           </label>
-          <label className="text-xs text-slate-400">
+          <label className={labelCls}>
             To
-            <input type="date" name="to" defaultValue={toRaw ?? ""} className={`${inputCls} mt-1 block`} />
+            <input type="date" name="to" defaultValue={toRaw ?? ""} className={inputCls} />
           </label>
-          <label className="text-xs text-slate-400">
+          <label className={`${labelCls} min-w-[220px] flex-1`}>
             Job number(s) — comma-separated
             <input
               name="jobNumbers"
               defaultValue={jobNumbersRaw ?? ""}
               placeholder="e.g. 26-1234-001, 26-1234-002"
-              className={`${inputCls} mt-1 block w-64`}
+              className={`${inputCls} w-full`}
             />
           </label>
-          <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500">
+          <button
+            type="submit"
+            className="flex h-8 items-center rounded-lg bg-gradient-to-b from-sky-500 to-blue-600 px-4 text-xs font-semibold text-white shadow-lg shadow-blue-900/50 transition-colors hover:from-sky-400 hover:to-blue-500"
+          >
             Apply
           </button>
-          <a href="/admin/timesheets" className="text-xs text-slate-400 hover:underline">
+          <a
+            href="/admin/timesheets"
+            className="flex h-8 items-center rounded-lg border border-white/10 px-3 text-xs text-slate-300 transition-colors hover:bg-white/5"
+          >
             Clear
           </a>
-          <PinUnlockLink href={exportHref} scope="export" className="ml-auto rounded-md border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
-            Export ({rows.length} rows)
-          </PinUnlockLink>
         </form>
 
         <ImportTimesheets />
+      </section>
 
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
-          <h2 className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
-            Summary by employee
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className={th}>Employee</th>
-                  <th className={th}>Days</th>
-                  <th className={th}>ST Hrs</th>
-                  <th className={th}>OT Hrs</th>
-                  <th className={th}>PTO</th>
-                  <th className={th}>Vacation</th>
-                  <th className={th}>Holiday</th>
-                  <th className={th}>Per Diem</th>
-                  <th className={th}>Miles</th>
-                  <th className={th}>Mileage $</th>
-                  <th className={th}>Expenses</th>
+      {/* Summary by employee */}
+      <section className={`mt-3 overflow-hidden ${cardClass}`}>
+        <div className="flex items-center justify-between px-3 py-2">
+          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-white">Summary by employee</h2>
+          <span className="text-[11px] text-slate-500">
+            {summary.length} employee{summary.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="max-h-[50vh] overflow-auto md:max-h-[28vh]">
+          <table className="w-full text-left text-[13px]">
+            <thead className={theadCls}>
+              <tr>
+                <th className={th}>Employee</th>
+                <th className={th}>Days</th>
+                <th className={th}>ST Hrs</th>
+                <th className={th}>OT Hrs</th>
+                <th className={th}>PTO</th>
+                <th className={th}>Vacation</th>
+                <th className={th}>Holiday</th>
+                <th className={th}>Per Diem</th>
+                <th className={th}>Miles</th>
+                <th className={th}>Mileage $</th>
+                <th className={th}>Expenses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">
+                    No timesheet entries match these filters.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {summary.length === 0 && (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
-                      No timesheet entries match these filters.
-                    </td>
-                  </tr>
-                )}
-                {summary.map((s) => (
-                  <tr key={s.employeeId} className="border-b border-white/5">
-                    <td className={td}>
-                      <Link href={`/admin/timesheets?employeeId=${s.employeeId}`} className="text-cyan-400 hover:underline">
-                        {s.name}
-                      </Link>
-                    </td>
-                    <td className={td}>{s.days}</td>
-                    <td className={td}>{s.stHours}</td>
-                    <td className={td}>{s.otHours}</td>
-                    <td className={td}>{s.ptoHours}</td>
-                    <td className={td}>{s.vacationHours}</td>
-                    <td className={td}>{s.holidayHours}</td>
-                    <td className={td}>{money(s.perDiem)}</td>
-                    <td className={td}>{s.mileageDriven}</td>
-                    <td className={td}>{money(s.mileageAmount)}</td>
-                    <td className={td}>{money(s.expenses)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {summary.length > 0 && (
-                <tfoot>
-                  <tr className="border-t border-white/10 font-semibold text-slate-200">
-                    <td className={td}>Total</td>
-                    <td className={td}>{grandTotal.days}</td>
-                    <td className={td}>{grandTotal.st}</td>
-                    <td className={td}>{grandTotal.ot}</td>
-                    <td className={td} colSpan={5}></td>
-                    <td className={td}>{money(grandTotal.expenses)}</td>
-                  </tr>
-                </tfoot>
               )}
-            </table>
-          </div>
-        </section>
-
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
-          <h2 className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
-            Detail ({rows.length} day{rows.length === 1 ? "" : "s"})
-          </h2>
-          <div className="max-h-[500px] overflow-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-900">
-                <tr className="border-b border-white/10">
-                  <th className={th}>Date</th>
-                  <th className={th}>Employee</th>
-                  <th className={th}>Job #</th>
-                  <th className={th}>Details</th>
-                  <th className={th}>ST</th>
-                  <th className={th}>OT</th>
-                  <th className={th}>Per Diem</th>
-                  <th className={th}>Miles</th>
-                  <th className={th}>Expenses</th>
+              {summary.map((s) => (
+                <tr key={s.employeeId} className="border-b border-white/[0.06] transition-colors hover:bg-sky-400/[0.05]">
+                  <td className={td}>
+                    <Link
+                      href={`/admin/timesheets?employeeId=${s.employeeId}`}
+                      className="font-semibold text-sky-300 hover:text-sky-200 hover:underline"
+                    >
+                      {s.name}
+                    </Link>
+                  </td>
+                  <td className={td}>{s.days}</td>
+                  <td className={td}>{s.stHours}</td>
+                  <td className={td}>{s.otHours}</td>
+                  <td className={td}>{s.ptoHours}</td>
+                  <td className={td}>{s.vacationHours}</td>
+                  <td className={td}>{s.holidayHours}</td>
+                  <td className={td}>{money(s.perDiem)}</td>
+                  <td className={td}>{s.mileageDriven}</td>
+                  <td className={td}>{money(s.mileageAmount)}</td>
+                  <td className={`${td} font-semibold text-white`}>{money(s.expenses)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const emp = r.timesheet.employee;
-                  const expenses =
-                    (r.lodging ?? 0) + (r.meals ?? 0) + (r.airfare ?? 0) + (r.fuel ?? 0) +
-                    (r.carRental ?? 0) + (r.gasoline ?? 0) + (r.parking ?? 0) + (r.misc ?? 0);
-                  return (
-                    <tr key={r.id} className="border-b border-white/5">
-                      <td className={td}>{isoDate(r.date)}</td>
-                      <td className={td}>{[emp.firstName, emp.lastName].filter(Boolean).join(" ")}</td>
-                      <td className={td}>{r.jobNumber ?? r.timesheet.jobNumber ?? "—"}</td>
-                      <td className={`${td} whitespace-normal`}>{r.details ?? "—"}</td>
-                      <td className={td}>{r.stHours ?? "—"}</td>
-                      <td className={td}>{r.otHours ?? "—"}</td>
-                      <td className={td}>{r.perDiem ? money(r.perDiem) : "—"}</td>
-                      <td className={td}>{r.mileageDriven ?? "—"}</td>
-                      <td className={td}>{expenses ? money(expenses) : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+              ))}
+            </tbody>
+            {summary.length > 0 && (
+              <tfoot className="sticky bottom-0 bg-[#0d1a31]">
+                <tr className="font-semibold text-white shadow-[0_-1px_0_rgba(255,255,255,0.08)]">
+                  <td className={`${td} text-[11px] uppercase tracking-wider text-sky-300/90`}>Total</td>
+                  <td className={`${td} text-white`}>{grandTotal.days}</td>
+                  <td className={`${td} text-white`}>{grandTotal.st}</td>
+                  <td className={`${td} text-white`}>{grandTotal.ot}</td>
+                  <td className={td} colSpan={5}></td>
+                  <td className={`${td} text-white`}>{money(grandTotal.expenses)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </section>
+
+      {/* Day-level detail */}
+      <section className={`mt-3 overflow-hidden ${cardClass}`}>
+        <div className="flex items-center justify-between px-3 py-2">
+          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-white">Detail</h2>
+          <span className="rounded-md border border-sky-400/25 bg-sky-400/[0.06] px-2 py-0.5 text-[11px] text-sky-200">
+            {rows.length} day{rows.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="max-h-[70vh] min-h-[220px] overflow-auto md:max-h-[calc(100vh-430px)]">
+          <table className="w-full text-left text-[13px]">
+            <thead className={theadCls}>
+              <tr>
+                <th className={th}>Date</th>
+                <th className={th}>Employee</th>
+                <th className={th}>Job #</th>
+                <th className={th}>Details</th>
+                <th className={th}>ST</th>
+                <th className={th}>OT</th>
+                <th className={th}>Per Diem</th>
+                <th className={th}>Miles</th>
+                <th className={th}>Expenses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const emp = r.timesheet.employee;
+                const expenses =
+                  (r.lodging ?? 0) + (r.meals ?? 0) + (r.airfare ?? 0) + (r.fuel ?? 0) +
+                  (r.carRental ?? 0) + (r.gasoline ?? 0) + (r.parking ?? 0) + (r.misc ?? 0);
+                return (
+                  <tr key={r.id} className="border-b border-white/[0.06] transition-colors hover:bg-sky-400/[0.05]">
+                    <td className={`${td} text-slate-400`}>{isoDate(r.date)}</td>
+                    <td className={`${td} text-white`}>{[emp.firstName, emp.lastName].filter(Boolean).join(" ")}</td>
+                    <td className={`${td} font-mono text-xs`}>{r.jobNumber ?? r.timesheet.jobNumber ?? dash}</td>
+                    <td className={`${td} min-w-48 whitespace-normal text-slate-400`}>{r.details ?? dash}</td>
+                    <td className={td}>{r.stHours ?? dash}</td>
+                    <td className={td}>{r.otHours ?? dash}</td>
+                    <td className={td}>{r.perDiem ? money(r.perDiem) : dash}</td>
+                    <td className={td}>{r.mileageDriven ?? dash}</td>
+                    <td className={td}>{expenses ? money(expenses) : dash}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }

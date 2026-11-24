@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
+import { getNavAccess, firstAllowedNavHref, invoiceVisibilityWhere } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -22,16 +22,11 @@ export default async function BillingSummaryPage({
   const groupBy: GroupBy = groupByParam === "jobNumber" ? "jobNumber" : "client";
   const showArchived = archivedParam === "1";
 
-  // Same site-scoping rule as the invoices list -- a PM/PL only ever sees
-  // totals for sites they've been granted under Site Access.
-  const isPMorPL = me.role === "PROJECT_MANAGER" || me.role === "PROJECT_LEAD";
-  const restrictedSites = isPMorPL ? await getRestrictedSites(me.id) : null;
-
+  // Same visibility rule as the invoices list -- a PM/PL only ever sees
+  // totals for invoices they created.
   const invoices = await prisma.invoice.findMany({
     where: {
-      ...(isPMorPL && restrictedSites ? { site: { in: [...restrictedSites] } } : {}),
-      status: { in: ["SENT", "PAID"] },
-      archived: showArchived,
+      AND: [invoiceVisibilityWhere(me), { status: { in: ["SENT", "PAID"] }, archived: showArchived }],
     },
     include: { client: true, lineItems: true },
   });
@@ -76,7 +71,7 @@ export default async function BillingSummaryPage({
   return (
     <main className="min-h-screen py-8">
       <div className="mx-auto max-w-3xl px-4">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">Billing summary</h1>
             <p className="text-sm text-slate-400">
@@ -105,7 +100,7 @@ export default async function BillingSummaryPage({
           </Link>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-slate-900/80">
               <tr>

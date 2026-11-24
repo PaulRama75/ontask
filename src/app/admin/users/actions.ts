@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword, requirePin } from "@/lib/auth";
-import { ROLES, isAdminRole, ROLE_LABELS, type Role } from "@/lib/rbac";
+import { isAdminRole, getRoleOptions, isValidRole } from "@/lib/rbac";
 import { sendEmail, emailButton } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import type { GatedResult } from "@/lib/gatedResult";
@@ -33,7 +33,7 @@ export async function createUser(form: FormData): Promise<UserActionResult> {
   const password = String(form.get("password") ?? "");
 
   if (!email || !password) return { ok: false, error: "Email and password are required." };
-  if (!ROLES.includes(role as (typeof ROLES)[number]))
+  if (!(await isValidRole(role, { activeOnly: true })))
     return { ok: false, error: "Invalid role." };
   if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
 
@@ -44,6 +44,7 @@ export async function createUser(form: FormData): Promise<UserActionResult> {
     data: { email, name, role, passwordHash: hashPassword(password) },
   });
 
+  const roleLabel = (await getRoleOptions()).find((r) => r.key === role)?.label ?? role;
   const base = process.env.APP_BASE_URL ?? "http://localhost:3000";
   const url = `${base}/login`;
   const greeting = name ? `Hi ${name},` : "Hello,";
@@ -51,7 +52,7 @@ export async function createUser(form: FormData): Promise<UserActionResult> {
     to: email,
     subject: "Your FER account is ready",
     html: `<p>${greeting}</p>
-<p>An account has been created for you on the FER Employee Onboarding system as <strong>${ROLE_LABELS[role as Role] ?? role}</strong>.</p>
+<p>An account has been created for you on the FER Employee Onboarding system as <strong>${roleLabel}</strong>.</p>
 ${emailButton(url, "Sign In")}
 <p>Username: ${email}<br>Password: ${password}</p>
 <p>Please sign in and change your password when you get a chance.</p>`,
@@ -68,7 +69,7 @@ export async function setUserRole(form: FormData): Promise<GatedResult> {
   if (pinFail) return pinFail;
   const id = String(form.get("userId") ?? "");
   const role = String(form.get("role") ?? "");
-  if (!id || !ROLES.includes(role as (typeof ROLES)[number])) return { ok: false, error: "Invalid role." };
+  if (!id || !(await isValidRole(role, { activeOnly: true }))) return { ok: false, error: "Invalid role." };
   await prisma.user.update({ where: { id }, data: { role } });
   revalidatePath("/admin/users");
   return { ok: true };
@@ -172,4 +173,30 @@ export async function revokeFullDocumentAccess(form: FormData): Promise<void> {
   if (!id) return;
   await prisma.user.update({ where: { id }, data: { hasFullDocumentAccess: false } });
   revalidatePath("/admin/users");
+}
+
+// Adds a new role to the roles table (from the "Add new role" popup on the
+// Users page). The key stored on users is derived from the name, e.g.
+// "Site Supervisor" -> "SITE_SUPERVISOR". New roles start with the same
+// minimal default access as Employee until set on the Access Control page.
+export async function createRole(
+  form: FormData,
+): Promise<{ ok: boolean; error?: string; role?: { key: string; label: string; status: string } }> {
+  await requireAdmin();
+  const roleName = String(form.get("roleName") ?? "").trim().replace(/\s+/g, " ");
+  const status = String(form.get("status") ?? "ACTIVE");
+  if (!roleName) return { ok: false, error: "Role name is required." };
+  if (roleName.length > 50) return { ok: false, error: "Role name must be 50 characters or less." };
+  if (status !== "ACTIVE" && status !== "INACTIVE") return { ok: false, error: "Invalid status." };
+  const key = roleName.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!key) return { ok: false, error: "Role name must contain letters or numbers." };
+
+  const existing = await getRoleOptions();
+  if (existing.some((r) => r.key === key || r.label.toLowerCase() === roleName.toLowerCase()))
+    return { ok: false, error: "A role with that name already exists." };
+
+  await prisma.role.create({ data: { key, roleName, status } });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/access");
+  return { ok: true, role: { key, label: roleName, status } };
 }

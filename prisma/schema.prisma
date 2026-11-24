@@ -24,6 +24,11 @@ model Employee {
   email     String?
   phone     String?
 
+  // Travel profile -- saved from the Travel Request form and used to pre-fill
+  // the next one. KTN is encrypted like ssn below.
+  dateOfBirth         DateTime?
+  knownTravelerNumber String? // Known Traveler Number, "enc:v1:" ciphertext
+
   // Sensitive — stored AES-256-GCM ciphertext with "enc:v1:" prefix (see src/lib/crypto.ts); legacy plaintext tolerated during migration.
   ssn String? // Social Security Number
 
@@ -172,6 +177,21 @@ model User {
 
   documentGrantsReceived EmployeeDocumentGrant[] @relation("DocumentGrantUser")
   documentGrantsMade     EmployeeDocumentGrant[] @relation("DocumentGrantGrantedBy")
+}
+
+// Application roles. The 9 built-in roles (src/lib/rbac.ts ROLES) are seeded
+// here by the migration; Admins can add more from the Users page.
+// key is the value stored in User.role (e.g. "HR", "SITE_SUPERVISOR").
+// status: ACTIVE | INACTIVE -- inactive roles are hidden from role pickers
+// but users who already have them keep them.
+model Role {
+  id        BigInt   @id @default(autoincrement())
+  key       String   @unique
+  roleName  String   @map("role_name")
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+
+  @@map("roles")
 }
 
 // A one-off grant letting a specific user view/download one employee's

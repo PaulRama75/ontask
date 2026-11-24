@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getFile } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole } from "@/lib/rbac";
+import { canViewInvoice } from "@/lib/rbac";
 
 // Serves an invoice attachment. Unlike /api/files/[id] (employee documents,
 // currently unauthenticated), this route checks the caller's role/ownership
@@ -18,9 +18,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   });
   if (!att) return new Response("Not found", { status: 404 });
 
-  const allowed =
-    isAdminRole(me.role) || me.role === "ACCOUNT_MANAGER" || att.invoice.createdByUserId === me.id;
-  if (!allowed) return new Response("Forbidden", { status: 403 });
+  // Same rule as opening the invoice itself (see canViewInvoice in rbac.ts).
+  if (!canViewInvoice(me, att.invoice)) return new Response("Forbidden", { status: 403 });
 
   const file = await getFile(att.storageKey);
   if (!file) return new Response("File missing", { status: 404 });

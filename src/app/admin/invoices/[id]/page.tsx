@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdminRole, getNavAccess, firstAllowedNavHref, getRestrictedSites } from "@/lib/rbac";
+import { isAdminRole, getNavAccess, firstAllowedNavHref, canViewInvoice, employeeRowScopeWhere } from "@/lib/rbac";
 import AttachmentUploadForm from "../AttachmentUploadForm";
 import {
   addLineItem,
@@ -113,18 +113,10 @@ export default async function InvoiceDetailPage({
   // admin (admins can fully manage every invoice, same as they bypass
   // restrictions everywhere else in this app — not just ones they created).
   const isOwner = isAdmin || (isPMorPL && invoice.createdByUserId === me.id);
-  // PMs/PLs can also view (not necessarily edit) every invoice for a site
-  // they've been granted under Site Access, not just ones they created.
-  let canViewBySite = false;
-  if (isPMorPL && !isOwner) {
-    const restrictedSites = await getRestrictedSites(me.id);
-    canViewBySite = !restrictedSites || restrictedSites.has(invoice.site);
-  }
-  // AMs only ever act on SUBMITTED/AM_APPROVED invoices (see the Actions
-  // section below) — viewing a DRAFT serves no purpose and would let an AM
-  // see a PM's in-progress invoice by guessing/sharing its URL before it's ready.
-  const canView = isOwner || canViewBySite || (isAM && invoice.status !== "DRAFT");
-  if (!canView) redirect("/admin/invoices");
+  // PM/PL may open only invoices they created, AMs anything past DRAFT,
+  // admins everything (see canViewInvoice in rbac.ts). Anyone else opening
+  // the URL directly is sent back to the list.
+  if (!canViewInvoice(me, invoice)) redirect("/admin/invoices");
 
   const isDraftEditable = invoice.status === "DRAFT" && isOwner;
   // An AM can fix a mistaken amount while it's awaiting their review; an
@@ -147,8 +139,10 @@ export default async function InvoiceDetailPage({
 
   let siteEmployees: { id: string; firstName: string | null; lastName: string | null }[] = [];
   if (isDraftEditable) {
+    // Only employees this user may see on the data grid (their own team for
+    // a Project Lead/Manager, plus Site Access), not everyone at the site.
     siteEmployees = await prisma.employee.findMany({
-      where: { site: invoice.site },
+      where: { AND: [{ site: invoice.site }, await employeeRowScopeWhere(me)] },
       select: { id: true, firstName: true, lastName: true },
       orderBy: { lastName: "asc" },
     });
@@ -160,15 +154,15 @@ export default async function InvoiceDetailPage({
   return (
     <main className="min-h-screen py-8">
       <div className="mx-auto max-w-3xl px-4">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-white">{invoice.site}</h1>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h1 className="min-w-0 break-words text-2xl font-bold text-white">{invoice.site}</h1>
           <Link href="/admin/invoices" className="text-sm text-cyan-400 hover:underline">
             ← All invoices
           </Link>
         </div>
 
-        <div className="mb-4 overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
-          <table className="w-full text-left text-sm">
+        <div className="mb-4 overflow-x-auto rounded-lg border border-white/10 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur">
+          <table className="w-full whitespace-nowrap text-left text-sm">
             <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-4 py-2">Site</th>
@@ -235,13 +229,13 @@ export default async function InvoiceDetailPage({
               {invoice.rejectionReason}
             </p>
             {isOwner && rejector && (
-              <form action={replyToRejection} className="mt-3 flex items-center gap-2">
+              <form action={replyToRejection} className="mt-3 flex flex-wrap items-center gap-2">
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <input
                   name="message"
                   placeholder={`Reply to ${rejector.name || rejector.email}…`}
                   required
-                  className="flex-1 rounded-md border border-rose-500/30 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500"
+                  className="min-w-[12rem] flex-1 rounded-md border border-rose-500/30 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500"
                 />
                 <button
                   type="submit"
@@ -254,7 +248,7 @@ export default async function InvoiceDetailPage({
           </div>
         )}
 
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-4 shadow-lg sm:p-6 shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">Line items</h2>
           {canEditAmounts && (
             <p className="mt-1 text-xs text-slate-400">
@@ -309,13 +303,13 @@ export default async function InvoiceDetailPage({
           </table>
 
           {isDraftEditable && (
-            <form action={addLineItem} className="mt-4 flex gap-2">
+            <form action={addLineItem} className="mt-4 flex flex-wrap gap-2">
               <input type="hidden" name="invoiceId" value={invoice.id} />
               <input
                 name="description"
                 placeholder="Description"
                 required
-                className="flex-1 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+                className="min-w-[12rem] flex-1 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
               />
               <input
                 name="amount"
@@ -356,8 +350,8 @@ export default async function InvoiceDetailPage({
           )}
         </section>
 
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <div className="flex items-center justify-between">
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-4 shadow-lg sm:p-6 shadow-black/30 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-white">Attachments</h2>
             {invoice.attachments.length > 1 && (
               <span className="text-xs text-slate-500">
@@ -368,10 +362,10 @@ export default async function InvoiceDetailPage({
           <ul className="mt-3 space-y-1 text-sm">
             {invoice.attachments.length === 0 && <li className="text-slate-500">No attachments yet.</li>}
             {invoice.attachments.map((att) => (
-              <li key={att.id} className="flex items-center justify-between gap-3">
+              <li key={att.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <a
                   href={`/api/invoice-files/${att.id}`}
-                  className="text-cyan-400 hover:underline"
+                  className="min-w-0 break-all text-cyan-400 hover:underline"
                 >
                   {att.fileName} <span className="text-xs text-slate-500">({att.category})</span>
                 </a>
@@ -429,8 +423,8 @@ export default async function InvoiceDetailPage({
           )}
         </section>
 
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
-          <div className="flex items-center justify-between">
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-4 shadow-lg sm:p-6 shadow-black/30 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-white">Comments</h2>
             {isOwner || isAM ? (
               <form action={updateInvoiceNumber} className="flex items-center gap-1">
@@ -475,7 +469,7 @@ export default async function InvoiceDetailPage({
               rows={2}
               required
               placeholder="Add a comment…"
-              className="flex-1 resize-y rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+              className="min-w-0 flex-1 resize-y rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
             />
             <button
               type="submit"
@@ -486,7 +480,7 @@ export default async function InvoiceDetailPage({
           </form>
         </section>
 
-        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-6 shadow-lg shadow-black/30 backdrop-blur">
+        <section className="mt-6 rounded-lg border border-white/10 bg-slate-900/60 p-4 shadow-lg sm:p-6 shadow-black/30 backdrop-blur">
           <h2 className="text-lg font-semibold text-white">Actions</h2>
           <div className="mt-3 flex flex-wrap gap-3">
             {isDraftEditable && invoice.lineItems.length > 0 && (
@@ -557,13 +551,13 @@ export default async function InvoiceDetailPage({
 
             {((isAM && invoice.status === "SUBMITTED") ||
               (isAdmin && (invoice.status === "SUBMITTED" || invoice.status === "AM_APPROVED"))) && (
-              <form action={runRejectInvoice} className="flex items-center gap-2">
+              <form action={runRejectInvoice} className="flex flex-wrap items-center gap-2">
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <input
                   name="reason"
                   placeholder="Rejection reason"
                   required
-                  className="rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
+                  className="min-w-0 rounded-md border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:ring-cyan-400"
                 />
                 <button
                   type="submit"

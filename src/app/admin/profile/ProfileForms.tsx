@@ -57,9 +57,9 @@ export default function ProfileForms({
       <section className={cardClass}>
         <h2 className="text-lg font-semibold text-white">Account</h2>
 
-        <div className="mt-4 flex items-center justify-between border-b border-white/5 py-2">
+        <div className="mt-4 flex items-center justify-between gap-3 border-b border-white/5 py-2">
           <span className="text-sm text-slate-400">Email</span>
-          <span className="text-sm text-white">{email}</span>
+          <span className="min-w-0 break-all text-right text-sm text-white">{email}</span>
         </div>
         <div className="flex items-center justify-between border-b border-white/5 py-2">
           <span className="text-sm text-slate-400">Role</span>

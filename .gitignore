@@ -51,3 +51,8 @@ next-env.d.ts
 
 # deploy build artifacts
 *.tar.gz
+# local backups
+/backups
+/.backup-*
+
+.backups/

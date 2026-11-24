@@ -54,13 +54,22 @@ export default function ImportTimesheets() {
     }
   }
 
-  const btn = "rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50";
+  const btn =
+    "flex h-7 items-center rounded-lg px-3 text-xs font-semibold text-white transition-colors disabled:opacity-50";
   return (
-    <details className="mt-4 rounded-md border border-white/10 bg-slate-950/40 p-3">
-      <summary className="cursor-pointer text-sm text-cyan-400">Import timesheets from a spreadsheet</summary>
-      <div className="mt-3 space-y-3">
+    <details className="group border-t border-white/[0.06] px-3 py-2">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-sky-300 hover:text-sky-200 [&::-webkit-details-marker]:hidden">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 transition-transform group-open:rotate-90">
+          <path d="m7 4 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Import timesheets from a spreadsheet
+      </summary>
+      <div className="mt-2 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <a href="/api/timesheet-import/template" className="text-xs text-cyan-400 hover:underline">
+          <a
+            href="/api/timesheet-import/template"
+            className="flex h-7 items-center rounded-lg border border-sky-400/25 bg-sky-400/[0.06] px-3 text-xs text-sky-200 transition-colors hover:bg-sky-400/15"
+          >
             Download template
           </a>
           <input
@@ -72,15 +81,15 @@ export default function ImportTimesheets() {
               setError(null);
               setDone(null);
             }}
-            className="text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-slate-600"
+            className="text-xs text-slate-300 file:mr-2 file:h-7 file:rounded-lg file:border file:border-white/10 file:bg-[#0a1426] file:px-3 file:text-xs file:text-white hover:file:bg-white/5"
           />
-          <button type="button" disabled={busy} onClick={() => send("preview")} className={`${btn} bg-slate-600 hover:bg-slate-500`}>
+          <button type="button" disabled={busy} onClick={() => send("preview")} className={`${btn} border border-white/10 bg-[#0a1426] hover:bg-white/5`}>
             {busy && !preview ? "Checking…" : "Preview"}
           </button>
         </div>
 
-        {error && <p className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-xs text-rose-300">{error}</p>}
-        {done && <p className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">{done}</p>}
+        {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs text-rose-300">{error}</p>}
+        {done && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">{done}</p>}
 
         {preview && (
           <div className="space-y-2 text-xs">
@@ -90,7 +99,7 @@ export default function ImportTimesheets() {
               {preview.invalid > 0 && <span className="text-rose-300">, {preview.invalid} with errors skipped</span>}.
             </p>
             {preview.issues.length > 0 && (
-              <ul className="max-h-32 space-y-0.5 overflow-y-auto rounded border border-white/10 bg-slate-950/40 p-2 text-amber-300">
+              <ul className="max-h-32 space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-[#0a1426] p-2 text-amber-300">
                 {preview.issues.map((i) => (
                   <li key={`${i.row}-${i.message}`}>
                     Row {i.row} ({i.email}): {i.message}
@@ -102,7 +111,7 @@ export default function ImportTimesheets() {
               type="button"
               disabled={busy || preview.willImport === 0}
               onClick={() => send("import")}
-              className={`${btn} bg-blue-600 hover:bg-blue-500`}
+              className={`${btn} bg-gradient-to-b from-sky-500 to-blue-600 shadow-lg shadow-blue-900/50 hover:from-sky-400 hover:to-blue-500`}
             >
               {busy ? "Importing…" : `Import ${preview.willImport} row${preview.willImport === 1 ? "" : "s"}`}
             </button>

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import PinDialog, { type PinConfirmResult } from "../PinDialog";
-import { setEmployeeSsn, setEmployeeDriversLicense } from "../actions";
+import { setEmployeeSsn, setEmployeeDriversLicense, setEmployeeKtn, setEmployeeTwicNumber } from "../actions";
 import { revealField, type SecretFieldKey } from "../pin/actions";
 import type { GatedResult } from "@/lib/gatedResult";
 
@@ -24,6 +24,8 @@ import type { GatedResult } from "@/lib/gatedResult";
 const WRITE_ACTION: Partial<Record<SecretFieldKey, (fd: FormData) => Promise<GatedResult>>> = {
   ssn: setEmployeeSsn,
   driversLicense: setEmployeeDriversLicense,
+  ktn: setEmployeeKtn,
+  twic: setEmployeeTwicNumber,
 };
 
 type Pending = { kind: "save" } | { kind: "clear" } | { kind: "reveal" } | null;
@@ -89,7 +91,7 @@ export default function SecretEditCell({
 
   return (
     <div className="flex items-center gap-1">
-      <span className="text-sm text-slate-300">
+      <span className="text-[13px] text-slate-300">
         {revealed !== null ? revealed || "—" : maskedValue}
       </span>
       {canReveal && (
@@ -98,7 +100,7 @@ export default function SecretEditCell({
           onClick={toggleReveal}
           aria-label={revealed !== null ? `Hide ${label}` : `Reveal ${label}`}
           title={revealed !== null ? `Hide ${label}` : `Reveal ${label}`}
-          className="text-slate-400 transition-colors hover:text-cyan-400"
+          className="text-slate-400 transition-colors hover:text-sky-300"
         >
           {revealed !== null ? (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
@@ -126,21 +128,21 @@ export default function SecretEditCell({
             if ((e.currentTarget.value ?? "").trim() !== "") setPending({ kind: "save" });
           }
         }}
-        className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-white/10 focus:border-cyan-400 focus:bg-slate-800 focus:outline-none"
+        className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] hover:border-white/10 focus:border-sky-400/60 focus:bg-[#0a1426] focus:outline-none"
       />
       <button
         type="button"
         onClick={() => {
           if ((inputRef.current?.value ?? "").trim() !== "") setPending({ kind: "save" });
         }}
-        className="rounded border border-white/10 px-1.5 py-0.5 text-xs text-slate-300 hover:bg-white/5"
+        className="rounded-md border border-sky-400/25 bg-sky-400/[0.06] px-1.5 py-0.5 text-[11px] text-sky-200 transition-colors hover:bg-sky-400/15"
       >
         Save
       </button>
       <button
         type="button"
         onClick={() => setPending({ kind: "clear" })}
-        className="rounded border border-white/10 px-1.5 py-0.5 text-xs text-slate-400 hover:bg-white/5"
+        className="rounded-md border border-white/10 px-1.5 py-0.5 text-[11px] text-slate-400 transition-colors hover:bg-white/5"
       >
         Clear
       </button>
