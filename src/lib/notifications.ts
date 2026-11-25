@@ -51,16 +51,6 @@ async function hrRecipients(): Promise<string[]> {
   return users.map((u) => u.email);
 }
 
-// Active Admins / Super Admins -- fallback for an annual review reminder
-// when the employee has no Project Manager on file.
-async function adminRecipients(): Promise<string[]> {
-  const users = await prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
-    select: { email: true },
-  });
-  return users.map((u) => u.email);
-}
-
 // Notification failures must never break the action that triggered them.
 // Returns how many recipients the email actually reached, so scheduled jobs
 // can retry a send that failed instead of marking it done.
@@ -358,19 +348,17 @@ export async function runScheduledNotifications(
     }
 
     // 4. Annual review reminder: one email to the employee's Project Manager
-    // 30 days before each hire-date anniversary (Admins when no PM is set).
+    // 30 days before each hire-date anniversary.
     const hired = await prisma.employee.findMany({
       where: { hireDate: { not: null }, archived: false, active: true },
       select: { id: true, firstName: true, lastName: true, hireDate: true, projectManagerEmail: true },
     });
-    let admins: string[] | null = null;
     for (const e of hired) {
       const due = annualReviewDue(e.hireDate!, todayUtc);
       if (!due) continue;
       const pm = e.projectManagerEmail?.trim();
-      const to = pm ? [pm] : (admins ??= await adminRecipients());
-      if (to.length === 0) {
-        console.warn("[notify] annual review: no PM and no active Admin for", e.id);
+      if (!pm) {
+        console.warn("[notify] annual review: no Project Manager email for employee", e.id);
         continue;
       }
       const key = `annual-review:${e.id}:${fmtDate(due.anniversary)}`;
@@ -378,10 +366,10 @@ export async function runScheduledNotifications(
       const name = fullName(e);
       const yrs = `${due.years} year${due.years === 1 ? "" : "s"}`;
       const sent = await send(
-        to,
+        [pm],
         `Annual review due ${fmtDate(due.anniversary)}: ${name} (${yrs})`,
         `<p><strong>${name}</strong> reaches ${yrs} with FER on <strong>${fmtDate(due.anniversary)}</strong> (hired ${fmtDate(e.hireDate!)}), ${due.daysLeft} day${due.daysLeft === 1 ? "" : "s"} from now.</p>
-<p>Please schedule and complete their annual review before that date.</p>${pm ? "" : `<p style="font-size:12px;color:#94a3b8">You're receiving this because no Project Manager is set for this employee.</p>`}
+<p>Please schedule and complete their annual review before that date.</p>
 ${employeeLink(e.id)}`,
       );
       if (sent === 0) {
