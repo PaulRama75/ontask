@@ -52,26 +52,32 @@ async function hrRecipients(): Promise<string[]> {
 }
 
 // Notification failures must never break the action that triggered them.
+// Returns how many recipients the email actually reached, so scheduled jobs
+// can retry a send that failed instead of marking it done.
 async function send(
   to: string[],
   subject: string,
   html: string,
   attachments?: { filename: string; content: string }[],
-): Promise<void> {
+): Promise<number> {
   const recipients = [...new Set(to.map((t) => t.trim()).filter(Boolean))];
   if (recipients.length === 0) {
     console.warn("[notify] no recipients for:", subject);
-    return;
+    return 0;
   }
-  await Promise.all(
+  const results = await Promise.all(
     recipients.map(async (r) => {
       try {
-        await sendEmail({ to: r, subject, html, attachments });
+        const ok = await sendEmail({ to: r, subject, html, attachments });
+        if (ok === false) console.error("[notify] send failed", r, subject);
+        return ok !== false;
       } catch (err) {
         console.error("[notify] send failed", r, subject, err);
+        return false;
       }
     }),
   );
+  return results.filter(Boolean).length;
 }
 
 function employeeLink(id: string): string {
@@ -236,6 +242,44 @@ async function claim(key: string): Promise<boolean> {
   }
 }
 
+// Give a claim back after the send failed, so the next hourly run retries it.
+async function release(key: string): Promise<void> {
+  await prisma.notificationLog.deleteMany({ where: { key } }).catch(() => {});
+}
+
+export const ANNUAL_REVIEW_LEAD_DAYS = 30;
+
+// The anniversary of `hireDate` falling in `year` (UTC midnight). A Feb 29
+// hire date is observed on Feb 28 in non-leap years.
+function anniversaryIn(hireDate: Date, year: number): number {
+  const m = hireDate.getUTCMonth();
+  let d = hireDate.getUTCDate();
+  const isLeapYear = new Date(Date.UTC(year, 1, 29)).getUTCDate() === 29;
+  if (m === 1 && d === 29 && !isLeapYear) d = 28;
+  return Date.UTC(year, m, d);
+}
+
+// Annual review reminder due for this hire date today? Picks the next
+// anniversary (at least 1 year after hire) and reports it when it's 1..30 days
+// away. The window, not a single exact day, means a missed run (server down,
+// hire date entered late) still gets its one reminder; the per-anniversary
+// claim key keeps it to one email.
+export function annualReviewDue(
+  hireDate: Date,
+  todayUtc: number,
+): { anniversary: Date; years: number; daysLeft: number } | null {
+  const todayYear = new Date(todayUtc).getUTCFullYear();
+  for (const year of [todayYear, todayYear + 1]) {
+    const anniv = anniversaryIn(hireDate, year);
+    const years = year - hireDate.getUTCFullYear();
+    if (anniv <= todayUtc || years < 1) continue;
+    const daysLeft = Math.round((anniv - todayUtc) / 86400000);
+    if (daysLeft > ANNUAL_REVIEW_LEAD_DAYS) return null;
+    return { anniversary: new Date(anniv), years, daysLeft };
+  }
+  return null;
+}
+
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
 
 export type ScheduledResult = { expiryDigest: number; anniversaries: number };
@@ -303,28 +347,35 @@ export async function runScheduledNotifications(
       result.expiryDigest = send2.length;
     }
 
-    // 4. Hire-date anniversary -> that employee's Project Lead / Project Manager.
+    // 4. Annual review reminder: one email to the employee's Project Manager
+    // 30 days before each hire-date anniversary.
     const hired = await prisma.employee.findMany({
       where: { hireDate: { not: null }, archived: false, active: true },
-      select: { id: true, firstName: true, lastName: true, hireDate: true, projectLeadEmail: true, projectManagerEmail: true },
+      select: { id: true, firstName: true, lastName: true, hireDate: true, projectManagerEmail: true },
     });
     for (const e of hired) {
-      const h = e.hireDate!;
-      const years = t.year - h.getUTCFullYear();
-      // A Feb 29 hire date is observed on Feb 28 in non-leap years.
-      const leapDay = h.getUTCMonth() === 1 && h.getUTCDate() === 29;
-      const isLeapYear = new Date(Date.UTC(t.year, 1, 29)).getUTCDate() === 29;
-      const annivMonth = h.getUTCMonth() + 1;
-      const annivDay = leapDay && !isLeapYear ? 28 : h.getUTCDate();
-      if (years < 1 || annivMonth !== t.month || annivDay !== t.day) continue;
-      const to = [e.projectLeadEmail, e.projectManagerEmail].filter((x): x is string => !!x);
-      if (to.length === 0) continue;
-      if (!force && !(await claim(`anniversary:${e.id}:${t.year}`))) continue;
-      await send(
-        to,
-        `Work anniversary today: ${fullName(e)} (${years} year${years === 1 ? "" : "s"})`,
-        `<p><strong>${fullName(e)}</strong> reaches ${years} year${years === 1 ? "" : "s"} with FER today (hired ${fmtDate(h)}).</p>${employeeLink(e.id)}`,
+      const due = annualReviewDue(e.hireDate!, todayUtc);
+      if (!due) continue;
+      const pm = e.projectManagerEmail?.trim();
+      if (!pm) {
+        console.warn("[notify] annual review: no Project Manager email for employee", e.id);
+        continue;
+      }
+      const key = `annual-review:${e.id}:${fmtDate(due.anniversary)}`;
+      if (!force && !(await claim(key))) continue;
+      const name = fullName(e);
+      const yrs = `${due.years} year${due.years === 1 ? "" : "s"}`;
+      const sent = await send(
+        [pm],
+        `Annual review due ${fmtDate(due.anniversary)}: ${name} (${yrs})`,
+        `<p><strong>${name}</strong> reaches ${yrs} with FER on <strong>${fmtDate(due.anniversary)}</strong> (hired ${fmtDate(e.hireDate!)}), ${due.daysLeft} day${due.daysLeft === 1 ? "" : "s"} from now.</p>
+<p>Please schedule and complete their annual review before that date.</p>
+${employeeLink(e.id)}`,
       );
+      if (sent === 0) {
+        if (!force) await release(key);
+        continue;
+      }
       result.anniversaries++;
     }
   }
