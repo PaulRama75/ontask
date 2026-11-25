@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole, getAccessMap, canView, canViewInvoice, employeeRowScopeWhere, COLUMNS, COLUMN_KEYS } from "@/lib/rbac";
 import { saveInvoiceFile, getFile } from "@/lib/storage";
 import { maskSsn, safeDecrypt } from "@/lib/crypto";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, emailButton } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { GatedResult } from "@/lib/gatedResult";
@@ -55,6 +55,55 @@ async function getInvoiceAdminRecipients() {
   return prisma.user.findMany({
     where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, active: true },
   });
+}
+
+// Account Managers who review submitted invoices. If nobody active holds the
+// role, fall back to the invoice admin recipients so a submitted invoice is
+// never left waiting with no one told about it.
+async function getAccountManagerRecipients() {
+  const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
+  if (ams.length > 0) return ams;
+  console.warn("[invoice-notify] no active Account Manager; notifying invoice admins instead");
+  return getInvoiceAdminRecipients();
+}
+
+// The PM/PL who created the invoice (only while their account is active).
+async function getInvoiceCreator(invoice: { createdByUserId: string }) {
+  const creator = await prisma.user.findUnique({ where: { id: invoice.createdByUserId } });
+  return creator && creator.active ? creator : null;
+}
+
+// Short label used in every workflow email: "#INV-123 · Site (Client)".
+function invoiceLabel(invoice: { invoiceNumber: string | null; site: string; clientName: string | null }) {
+  const parts = [invoice.invoiceNumber ? `#${invoice.invoiceNumber}` : null, invoice.site].filter(Boolean);
+  return parts.join(" · ") + (invoice.clientName ? ` (${invoice.clientName})` : "");
+}
+
+// Sends one workflow notification to each recipient (deduplicated, each its
+// own email so addresses aren't exposed to each other). Every send is
+// awaited one at a time -- sendEmail retries Resend's rate limit -- and a
+// failure for one person never stops the others or the status change.
+async function notifyInvoiceUsers(
+  recipients: { email: string }[],
+  invoiceId: string,
+  subject: string,
+  bodyHtml: string,
+  opts: { exclude?: string[] } = {},
+): Promise<void> {
+  const exclude = new Set((opts.exclude ?? []).map((e) => e.trim().toLowerCase()));
+  const emails = [
+    ...new Set(recipients.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean)),
+  ].filter((e) => !exclude.has(e));
+  if (emails.length === 0) {
+    console.warn("[invoice-notify] no recipients", { invoiceId, subject });
+    return;
+  }
+  const base = process.env.APP_BASE_URL ?? "http://localhost:3000";
+  const html = `${bodyHtml}${emailButton(`${base}/admin/invoices/${invoiceId}`, "Open invoice")}`;
+  for (const to of emails) {
+    const ok = await sendEmail({ to, subject, html });
+    if (!ok) console.error("[invoice-notify] email not delivered", { invoiceId, to, subject });
+  }
 }
 
 // Stamps who last touched an invoice (status change, line items, attachments,
@@ -541,14 +590,13 @@ export async function submitInvoice(form: FormData): Promise<GatedResult> {
     data: { status: "SUBMITTED", lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
   });
 
-  const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
-  for (const am of ams) {
-    await sendEmail({
-      to: am.email,
-      subject: `Invoice ready for review — ${invoice.site}`,
-      html: `<p>A new invoice for ${escapeHtml(invoice.site)} is ready for your review.</p>`,
-    });
-  }
+  const label = escapeHtml(invoiceLabel(invoice));
+  await notifyInvoiceUsers(
+    await getAccountManagerRecipients(),
+    id,
+    `Invoice ready for review — ${invoiceLabel(invoice)}`,
+    `<p>${escapeHtml(me.name || me.email)} submitted the invoice <strong>${label}</strong>. It is ready for your review.</p>`,
+  );
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
@@ -573,13 +621,23 @@ export async function approveInvoice(form: FormData): Promise<GatedResult> {
     },
   });
 
-  const admins = await getInvoiceAdminRecipients();
-  for (const admin of admins) {
-    await sendEmail({
-      to: admin.email,
-      subject: `Invoice ready for final approval — ${invoice.site}`,
-      html: `<p>An invoice for ${escapeHtml(invoice.site)} was approved by the Account Manager and is ready for your final sign-off.</p>`,
-    });
+  const label = escapeHtml(invoiceLabel(invoice));
+  const approver = escapeHtml(me.name || me.email);
+  await notifyInvoiceUsers(
+    await getInvoiceAdminRecipients(),
+    id,
+    `Invoice ready for final approval — ${invoiceLabel(invoice)}`,
+    `<p>The invoice <strong>${label}</strong> was approved by ${approver} (Account Manager) and is ready for your final sign-off.</p>`,
+  );
+  const creator = await getInvoiceCreator(invoice);
+  if (creator) {
+    await notifyInvoiceUsers(
+      [creator],
+      id,
+      `Your invoice was approved by the Account Manager — ${invoiceLabel(invoice)}`,
+      `<p>Your invoice <strong>${label}</strong> was approved by ${approver} (Account Manager) and is now waiting for Admin approval.</p>`,
+      { exclude: [me.email] },
+    );
   }
 
   revalidatePath(`/admin/invoices/${id}`);
@@ -616,13 +674,15 @@ export async function rejectInvoice(form: FormData): Promise<GatedResult> {
     },
   });
 
-  const creator = await prisma.user.findUnique({ where: { id: invoice.createdByUserId } });
+  const creator = await getInvoiceCreator(invoice);
   if (creator) {
-    await sendEmail({
-      to: creator.email,
-      subject: `Invoice rejected — ${invoice.site}`,
-      html: `<p>Your invoice for ${escapeHtml(invoice.site)} was rejected.</p><p><strong>Reason:</strong> ${escapeHtml(reason)}</p><p>Please review and resubmit.</p>`,
-    });
+    await notifyInvoiceUsers(
+      [creator],
+      id,
+      `Invoice rejected — ${invoiceLabel(invoice)}`,
+      `<p>Your invoice <strong>${escapeHtml(invoiceLabel(invoice))}</strong> was rejected by ${escapeHtml(me.name || me.email)}.</p><p><strong>Reason:</strong> ${escapeHtml(reason)}</p><p>Please review and resubmit.</p>`,
+      { exclude: [me.email] },
+    );
   }
 
   revalidatePath(`/admin/invoices/${id}`);
@@ -647,14 +707,14 @@ export async function approveInvoiceFinal(form: FormData): Promise<GatedResult> 
     data: { status: "ADMIN_APPROVED", lastModifiedByUserId: me.id, lastModifiedByName: me.name || me.email },
   });
 
-  const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
-  for (const am of ams) {
-    await sendEmail({
-      to: am.email,
-      subject: `Invoice approved — ${invoice.site}`,
-      html: `<p>The invoice for ${escapeHtml(invoice.site)} has been approved and will be sent to the client.</p>`,
-    });
-  }
+  const creator = await getInvoiceCreator(invoice);
+  await notifyInvoiceUsers(
+    [...(await getAccountManagerRecipients()), ...(creator ? [creator] : [])],
+    id,
+    `Invoice approved — ${invoiceLabel(invoice)}`,
+    `<p>The invoice <strong>${escapeHtml(invoiceLabel(invoice))}</strong> was given final approval by ${escapeHtml(me.name || me.email)} (Admin) and will be sent to the client.</p>`,
+    { exclude: [me.email] },
+  );
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
@@ -713,14 +773,25 @@ ${rows}
   if (sent) {
     await prisma.invoice.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
 
-    const ams = await prisma.user.findMany({ where: { role: "ACCOUNT_MANAGER", active: true } });
-    for (const am of ams) {
-      await sendEmail({
-        to: am.email,
-        subject: `Invoice sent to client — ${invoice.site}`,
-        html: `<p>The invoice for ${escapeHtml(invoice.site)} has been sent to the client.</p>`,
-      });
+    // Everyone in the chain hears that it went out -- including the PM/PL
+    // who created it, who previously got no update after submitting.
+    const creator = await getInvoiceCreator(invoice);
+    const sentBody = `<p>The invoice <strong>${escapeHtml(invoiceLabel(invoice))}</strong> was sent to the client (${escapeHtml(invoice.client.email)}) by ${escapeHtml(me.name || me.email)}. Its status is now <strong>Sent</strong>.</p>`;
+    if (creator) {
+      await notifyInvoiceUsers(
+        [creator],
+        id,
+        `Your invoice was sent to the client — ${invoiceLabel(invoice)}`,
+        sentBody,
+      );
     }
+    await notifyInvoiceUsers(
+      await getAccountManagerRecipients(),
+      id,
+      `Invoice sent to client — ${invoiceLabel(invoice)}`,
+      sentBody,
+      { exclude: [me.email, ...(creator ? [creator.email] : [])] },
+    );
   }
 
   revalidatePath(`/admin/invoices/${id}`);
@@ -849,10 +920,11 @@ export async function replyToRejection(form: FormData): Promise<void> {
   const rejector = await prisma.user.findUnique({ where: { id: invoice.rejectedByUserId } });
   if (rejector) {
     const from = me.name || me.email;
-    await sendEmail({
-      to: rejector.email,
-      subject: `Reply — invoice for ${invoice.site}`,
-      html: `<p>${escapeHtml(from)} replied about the invoice for ${escapeHtml(invoice.site)} you rejected:</p><p>${escapeHtml(message)}</p>`,
-    });
+    await notifyInvoiceUsers(
+      [rejector],
+      id,
+      `Reply — invoice ${invoiceLabel(invoice)}`,
+      `<p>${escapeHtml(from)} replied about the invoice <strong>${escapeHtml(invoiceLabel(invoice))}</strong> you rejected:</p><p>${escapeHtml(message)}</p>`,
+    );
   }
 }
