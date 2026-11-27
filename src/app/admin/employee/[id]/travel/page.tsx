@@ -31,9 +31,9 @@ function YesNoSelect({ name, defaultValue }: { name: string; defaultValue?: stri
 }
 
 // Same choices as the dropdowns on the OP-FORM-02 Word form.
-function Choice({ name, options }: { name: string; options: string[] }) {
+function Choice({ name, options, defaultValue = "" }: { name: string; options: string[]; defaultValue?: string }) {
   return (
-    <select name={name} defaultValue="" className={inputCls}>
+    <select name={name} defaultValue={options.includes(defaultValue) ? defaultValue : ""} className={inputCls}>
       <option value="">—</option>
       {options.map((o) => (
         <option key={o} value={o}>
@@ -69,11 +69,12 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
   const last = await prisma.travelRequest.findFirst({
     where: { employeeId: e.id },
     orderBy: { createdAt: "desc" },
-    select: { dateOfBirth: true, knownTravelerNumber: true, phone: true, email: true },
+    select: { dateOfBirth: true, gender: true, knownTravelerNumber: true, phone: true, email: true },
   });
   const dob = e.dateOfBirth ?? last?.dateOfBirth ?? null;
   const prefill = {
     dateOfBirth: dob ? dob.toISOString().slice(0, 10) : "",
+    gender: e.gender ?? last?.gender ?? "",
     knownTravelerNumber: safeDecrypt(e.knownTravelerNumber) ?? last?.knownTravelerNumber ?? "",
     phone: e.phone ?? last?.phone ?? "",
     email: e.email ?? last?.email ?? "",
@@ -118,7 +119,7 @@ export default async function TravelRequestPage({ params }: { params: Promise<{ 
                 <input type="date" name="dateOfBirth" defaultValue={prefill.dateOfBirth} className={inputCls} />
               </Field>
               <Field label="Gender">
-                <Choice name="gender" options={["Male", "Female"]} />
+                <Choice name="gender" options={["Male", "Female"]} defaultValue={prefill.gender} />
               </Field>
               <Field label="Known Traveler # (if applicable)">
                 <input name="knownTravelerNumber" defaultValue={prefill.knownTravelerNumber} autoComplete="off" className={inputCls} />

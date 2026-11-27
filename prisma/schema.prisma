@@ -28,6 +28,7 @@ model Employee {
   // the next one. KTN is encrypted like ssn below.
   dateOfBirth         DateTime?
   knownTravelerNumber String? // Known Traveler Number, "enc:v1:" ciphertext
+  gender              String? // "Male" | "Female", as picked on the travel form
 
   // Sensitive — stored AES-256-GCM ciphertext with "enc:v1:" prefix (see src/lib/crypto.ts); legacy plaintext tolerated during migration.
   ssn String? // Social Security Number

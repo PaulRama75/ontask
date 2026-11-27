@@ -67,13 +67,14 @@ export async function submitTravelRequest(form: FormData): Promise<void> {
     submittedByName: me.name || me.email,
   };
 
-  // Also keep DOB / Known Traveler # / phone on the employee's own record so
+  // Also keep DOB / gender / Known Traveler # / phone on the employee's own record so
   // the next travel request pre-fills them. A blank field on the form never
   // clears what is already saved. Email is deliberately NOT copied back: it is
   // the key that links an Employee-role login to this record (getOwnEmployeeId).
   const profile = {
     ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
     ...(data.knownTravelerNumber ? { knownTravelerNumber: encField(data.knownTravelerNumber) } : {}),
+    ...(data.gender ? { gender: data.gender } : {}),
     ...(data.phone ? { phone: data.phone } : {}),
   };
 
